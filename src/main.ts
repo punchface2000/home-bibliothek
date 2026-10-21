@@ -11,6 +11,7 @@ import { addView } from './views/add';
 import { bookView } from './views/book';
 import { homeView } from './views/home';
 import { findView, listView } from './views/lists';
+import { showWelcome } from './views/help';
 import { shelfView } from './views/shelf';
 
 const root = document.getElementById('app')!;
@@ -58,6 +59,7 @@ initHistory();
 applyTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => settings.theme === 'auto' && applyTheme());
 render();
+if (!settings.welcomeSeen) window.setTimeout(showWelcome, 300);
 
 // keep the app fresh: the new version is used the next time it's opened
 registerSW({ immediate: true });

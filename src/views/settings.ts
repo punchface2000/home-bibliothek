@@ -7,6 +7,7 @@ import { segmented } from '../ui/components';
 import { formatDate, h, icon } from '../ui/dom';
 import { I } from '../ui/icons';
 import { openSheet, toast } from '../ui/overlay';
+import { helpSheet } from './help';
 
 export function settingsSheet(): void {
   openSheet(t.settings, (body, close) => {
@@ -82,6 +83,7 @@ export function settingsSheet(): void {
         ),
         fileInput
       ),
+      h('button', { class: 'btn wide', type: 'button', onClick: () => (close(), window.setTimeout(helpSheet, 250)) }, icon(I.help), t.helpTitle),
       h('p', { class: 'muted small about' }, t.dataSources, h('br'), `Home Library · ${t.books(lib.books.length)}`)
     );
   });

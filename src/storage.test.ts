@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addBook, emptyLibrary } from './library';
-import { backupFileName, backupJson, DEFAULT_SETTINGS, loadLibrary, loadSettings, parseBackup, saveLibrary, saveSettings } from './storage';
+import { needsBackupReminder, backupFileName, backupJson, DEFAULT_SETTINGS, loadLibrary, loadSettings, parseBackup, saveLibrary, saveSettings } from './storage';
 
 class MemoryStorage {
   data = new Map<string, string>();
@@ -67,5 +67,16 @@ describe('storage', () => {
     expect(parseBackup('not json', ['X'])).toBeNull();
     expect(parseBackup('{"hello":1}', ['X'])).toBeNull();
     expect(backupFileName(new Date(2026, 9, 21, 23, 59))).toBe('home-library-2026-10-21.json');
+  });
+
+  it('decides when to remind about backups', () => {
+    const day = 24 * 3600 * 1000;
+    const now = 1000 * day;
+    expect(needsBackupReminder(10, 0, 0, now)).toBe(false); // small library
+    expect(needsBackupReminder(11, 0, 0, now)).toBe(true); // never backed up
+    expect(needsBackupReminder(50, now - 10 * day, 0, now)).toBe(false); // recent backup
+    expect(needsBackupReminder(50, now - 31 * day, 0, now)).toBe(true); // old backup
+    expect(needsBackupReminder(50, 0, now - 3 * day, now)).toBe(false); // snoozed
+    expect(needsBackupReminder(50, 0, now - 15 * day, now)).toBe(true); // snooze over
   });
 });

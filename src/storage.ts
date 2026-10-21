@@ -22,6 +22,12 @@ export interface Settings {
   lastOwned: boolean;
   /** time of the last backup export, 0 = never */
   lastBackup: number;
+  /** the one-time welcome cards were shown */
+  welcomeSeen: boolean;
+  /** the "swipe sideways" hint in the room was used */
+  swipeHintSeen: boolean;
+  /** when the backup reminder was last dismissed, 0 = never */
+  backupNudgeDismissed: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,7 +39,10 @@ export const DEFAULT_SETTINGS: Settings = {
   lastShelfId: '',
   lastStatus: 'toread',
   lastOwned: true,
-  lastBackup: 0
+  lastBackup: 0,
+  welcomeSeen: false,
+  swipeHintSeen: false,
+  backupNudgeDismissed: 0
 };
 
 const KEY_SETTINGS = 'home-library.settings';
@@ -110,4 +119,24 @@ export function parseBackup(text: string, defaultShelfNames: string[]): Library 
 export function backupFileName(now = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `home-library-${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}.json`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Backup reminder                                                    */
+/* ------------------------------------------------------------------ */
+
+const DAY = 24 * 3600 * 1000;
+export const BACKUP_REMIND_BOOKS = 10;
+export const BACKUP_REMIND_DAYS = 30;
+export const BACKUP_SNOOZE_DAYS = 14;
+
+/**
+ * Show the backup reminder when the library has more than 10 books, the last
+ * backup is over 30 days old (or never), and it wasn't dismissed in the last 14 days.
+ */
+export function needsBackupReminder(bookCount: number, lastBackup: number, dismissedAt: number, now = Date.now()): boolean {
+  if (bookCount <= BACKUP_REMIND_BOOKS) return false;
+  if (lastBackup && now - lastBackup < BACKUP_REMIND_DAYS * DAY) return false;
+  if (dismissedAt && now - dismissedAt < BACKUP_SNOOZE_DAYS * DAY) return false;
+  return true;
 }

@@ -4,7 +4,7 @@
  * along the wall; tap a bookcase to open that shelf.
  */
 import { addShelf, sortBooks, type Shelf } from '../library';
-import { commit, go, lib, settings, t } from '../app';
+import { commit, go, lib, settings, t, updateSettings } from '../app';
 import { fitRows } from '../shelfLayout';
 import { bookcaseEl, caseRows } from '../ui/bookcase';
 import { h, icon } from '../ui/dom';
@@ -46,9 +46,37 @@ export function roomEl(): { el: HTMLElement; mounted(): void; cleanup(): void } 
     items.push(sconce(), newShelfAlcove());
     track.replaceChildren(...items);
     scroller.scrollLeft = savedScroll;
+    showSwipeHint();
   }
 
-  const onScroll = () => (savedScroll = scroller.scrollLeft);
+  // first time only: show that there's more to the right
+  let hint: HTMLElement | null = null;
+  function showSwipeHint(): void {
+    if (settings.swipeHintSeen || hint || scroller.scrollWidth <= scroller.clientWidth + 8 || savedScroll > 0) return;
+    hint = h(
+      'button',
+      {
+        class: 'swipe-hint',
+        type: 'button',
+        onClick: () => scroller.scrollBy({ left: Math.round(el.clientWidth * 0.7), behavior: 'smooth' })
+      },
+      h('span', null, t.swipeHint),
+      icon(I.chevron, 'icon swipe-arrow')
+    );
+    el.appendChild(hint);
+  }
+  function hideSwipeHint(): void {
+    if (!hint) return;
+    updateSettings({ swipeHintSeen: true }, false);
+    const old = hint;
+    old.classList.add('gone');
+    window.setTimeout(() => old.remove(), 300);
+  }
+
+  const onScroll = () => {
+    savedScroll = scroller.scrollLeft;
+    if (hint && !settings.swipeHintSeen && scroller.scrollLeft > 24) hideSwipeHint();
+  };
   let timer = 0;
   const onResize = () => {
     clearTimeout(timer);

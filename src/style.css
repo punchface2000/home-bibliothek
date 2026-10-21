@@ -190,6 +190,10 @@ svg { display: block; }
   letter-spacing: -.01em;
   padding-left: 8px;
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topbar-title {
   flex: 1;
@@ -776,6 +780,105 @@ svg { display: block; }
 }
 .room-new::after { opacity: .3; }
 
+
+/* ============ Help, welcome tour, hints ============ */
+.help-list { display: flex; flex-direction: column; gap: 16px; }
+.help-item { display: flex; gap: 12px; align-items: flex-start; }
+.help-icon { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.help-icon .icon { width: 20px; height: 20px; }
+.help-item h3 { font-family: var(--serif); font-size: 16px; font-weight: 600; margin-bottom: 3px; }
+.help-item p { font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+.welcome-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
+  align-content: center;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  background: rgba(20, 10, 0, 0);
+  transition: background .25s;
+}
+.welcome-tour.shown { background: rgba(20, 10, 0, .55); }
+.tour-box {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 26px 0 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), transparent 40%),
+    var(--bg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .4);
+  transform: translateY(24px) scale(.97);
+  opacity: 0;
+  transition: transform .25s, opacity .25s;
+}
+.welcome-tour.shown .tour-box { transform: none; opacity: 1; }
+.tour-track { width: 100%; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.tour-track::-webkit-scrollbar { display: none; }
+.tour-card { flex: 0 0 100%; scroll-snap-align: center; padding: 0 26px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tour-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+  color: #f6e3b4;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .07) 0 1px, transparent 1px 6px),
+    linear-gradient(180deg, var(--wood-hi), var(--wood-lo));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 6px 16px rgba(60, 30, 5, .35);
+}
+.tour-icon .icon { width: 44px; height: 44px; }
+.tour-card h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
+.tour-card p { color: var(--muted); line-height: 1.5; font-size: 15px; }
+.tour-dots { display: flex; justify-content: center; gap: 7px; margin: 18px 0 2px; }
+.tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: background .2s, width .2s; }
+.tour-dots span.on { background: var(--accent); width: 20px; border-radius: 4px; }
+.tour-box .btn-row { padding: 0 20px; margin-top: 14px; }
+.tour-skip { border-color: transparent; background: none; color: var(--muted); }
+
+.swipe-hint {
+  position: absolute;
+  right: 12px;
+  top: 42%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: rgba(30, 18, 8, .78);
+  color: #f6ead2;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  animation: nudge-right 1.6s ease-in-out infinite;
+  transition: opacity .3s;
+}
+.swipe-hint.gone { opacity: 0; pointer-events: none; }
+.swipe-arrow { width: 18px; height: 18px; }
+@keyframes nudge-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
+
+.nudge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 10px;
+  padding: 8px 4px 8px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.nudge-icon { color: var(--accent); width: 20px; height: 20px; }
+.nudge-text { flex: 1; min-width: 0; }
+.nudge .btn { flex: none; }
+
 /* ============ Rows (lists) ============ */
 .results { display: flex; flex-direction: column; }
 .row {
@@ -1103,3 +1206,4 @@ svg { display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+.help-icon svg:not([fill]), .tour-icon svg:not([fill]) { fill: currentColor; }

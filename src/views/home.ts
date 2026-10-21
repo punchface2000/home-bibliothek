@@ -9,6 +9,7 @@ import { I } from '../ui/icons';
 import { promptSheet } from '../ui/overlay';
 import type { View } from '../ui/view';
 import { roomEl } from './room';
+import { backupReminder, helpSheet } from './help';
 import { askClaudeSheet, settingsSheet } from './settings';
 
 let query = '';
@@ -72,6 +73,7 @@ export function homeView(): View {
         { class: 'topbar-actions' },
         iconButton(room ? I.grid : I.room, room ? t.viewGrid : t.viewRoom, () => updateSettings({ homeView: room ? 'grid' : 'room' })),
         iconButton(I.sparkle, t.askClaude, () => askClaudeSheet()),
+        iconButton(I.help, t.help, () => helpSheet()),
         iconButton(I.gear, t.settings, () => settingsSheet())
       )
     ),
@@ -112,7 +114,9 @@ function topParts(compact: boolean): HTMLElement[] {
     [t.wishlist, c.wishlist, () => go({ name: 'list', filter: 'wishlist' })],
     [t.status.abandoned, c.abandoned, () => go({ name: 'list', filter: 'abandoned' })]
   ];
+  const nudge = backupReminder();
   return [
+    ...(nudge ? [nudge] : []),
     h(
       'div',
       { class: 'chips' },

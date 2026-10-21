@@ -23,6 +23,7 @@ To get a new version: open the app while online (sometimes twice).
   - **Quote**: paste a sentence from a book; Google Books' full-text search finds which book it's from.
   - **Manual**: for books that aren't in any catalogue.
 - **Ask Claude (✦):** copies a summary of your library (or of one book) and opens Claude, so you get personal recommendations through your normal Claude account. No API key, nothing sent from the app itself.
+- **Help (?):** a short guide to every feature, and the welcome cards again. The welcome shows once on first launch; the room shows a one-time "swipe for more" hint; a backup reminder appears when you have more than 10 books and no backup in 30 days ("Later" snoozes it for 2 weeks).
 - **Settings (⚙):** theme (auto/light/dark), language (auto/English/Deutsch), **backup export/import**.
 
 **Backups:** your library lives only on this device (browser storage). Export a backup now and then (on iPhone: Share → Save to Files). Importing merges a backup into the current library (newer edits win, nothing is deleted), which is also how to move your library to another device.

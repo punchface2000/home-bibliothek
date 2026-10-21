@@ -146,7 +146,34 @@ const en = {
   copyOpen: 'Copy and open Claude',
   copyOnly: 'Copy only',
   copied: 'Copied. Paste it into Claude if needed.',
-  copyFailed: 'Couldn’t copy automatically. Select the text and copy it.'
+  copyFailed: 'Couldn’t copy automatically. Select the text and copy it.',
+  // help, welcome, hints
+  help: 'Help',
+  helpTitle: 'How it works',
+  helpItems: [
+    ['room', 'Your library', 'Each shelf is a bookcase in the library room. Swipe sideways to walk along the wall, tap a bookcase to open it. The dashed alcove at the end adds a new shelf. The button at the top switches to a compact card view.'],
+    ['spines', 'On a shelf', 'Tap a book’s spine to open it. A red ribbon means you’re reading it, a dashed outline means it’s on your wishlist (you don’t own it). The buttons at the top switch to covers, sort the books, or rename, move and delete the shelf.'],
+    ['plus', 'Adding books', 'Tap + and scan the barcode on the back of the book. No camera? Take a photo of the barcode or type the ISBN. You can also search by title or author, paste a sentence from the book (Quote), or enter it by hand.'],
+    ['star', 'Your book card', 'Set the status, rate it in half stars (tap the same star again to clear), move it to another shelf, and keep notes and favourite quotes. Start and finish dates fill in by themselves when you change the status.'],
+    ['search', 'Finding things', 'The search box on the home screen searches your own books — titles, authors, ISBNs, your notes and quotes. The chips below it list everything you’re reading, want to read, have read, or wish for.'],
+    ['sparkle', 'Ask Claude', 'Copies a summary of your library (or of one book) and opens Claude for personal recommendations, using your normal Claude account. The app itself sends nothing and costs nothing.'],
+    ['download', 'Backups', 'Your library is stored only on this device. In Settings, export a backup now and then (on iPhone: Save to Files). Importing a backup adds it to the current library — that’s also how you move your books to another device.'],
+    ['external', 'Install and update', 'In Safari: Share → Add to Home Screen. The app works offline; adding books needs internet. To get a new version, open the app while online (sometimes twice).']
+  ] as [string, string, string][],
+  showWelcome: 'Show the welcome again',
+  welcomeCards: [
+    ['room', 'Your library at home', 'Every shelf you create becomes a bookcase. Your books stand on it as spines, coloured like their covers.'],
+    ['barcode', 'Adding books is quick', 'Scan the barcode on the back of a book, search by title, or paste a sentence from it. Then rate it, write notes and save quotes.'],
+    ['download', 'Keep a backup', 'Your library lives only on this device. Export a backup from Settings now and then — the app will remind you.']
+  ] as [string, string, string][],
+  skip: 'Skip',
+  next: 'Next',
+  start: 'Let’s go',
+  swipeHint: 'Swipe for more',
+  backupNudge: 'Your library is only on this device. Export a backup?',
+  backupNudgeNever: 'No backup yet',
+  exportShort: 'Export',
+  later: 'Later'
 };
 
 export type Strings = typeof en;
@@ -290,7 +317,33 @@ const de: Strings = {
   copyOpen: 'Kopieren und Claude öffnen',
   copyOnly: 'Nur kopieren',
   copied: 'Kopiert. Füge es bei Bedarf in Claude ein.',
-  copyFailed: 'Automatisches Kopieren ging nicht. Markiere den Text und kopiere ihn.'
+  copyFailed: 'Automatisches Kopieren ging nicht. Markiere den Text und kopiere ihn.',
+  help: 'Hilfe',
+  helpTitle: 'So funktioniert’s',
+  helpItems: [
+    ['room', 'Deine Bibliothek', 'Jedes Regal ist ein Bücherschrank im Bibliotheksraum. Wische seitwärts, um an der Wand entlangzugehen, und tippe auf einen Schrank, um ihn zu öffnen. Die gestrichelte Nische am Ende fügt ein neues Regal hinzu. Der Knopf oben wechselt zur kompakten Kartenansicht.'],
+    ['spines', 'Im Regal', 'Tippe auf einen Buchrücken, um das Buch zu öffnen. Ein rotes Lesebändchen heißt „lese ich gerade“, ein gestrichelter Umriss heißt „auf der Wunschliste“ (nicht in deinem Besitz). Die Knöpfe oben zeigen Cover, sortieren die Bücher oder benennen, verschieben und löschen das Regal.'],
+    ['plus', 'Bücher hinzufügen', 'Tippe auf + und scanne den Barcode auf der Rückseite. Keine Kamera? Fotografiere den Barcode oder tippe die ISBN ein. Du kannst auch nach Titel oder Autor suchen, einen Satz aus dem Buch einfügen (Zitat) oder es von Hand eintragen.'],
+    ['star', 'Deine Buchkarte', 'Status setzen, in halben Sternen bewerten (denselben Stern nochmal tippen zum Entfernen), in ein anderes Regal stellen, Notizen und Lieblingszitate festhalten. Start- und Enddatum füllen sich beim Statuswechsel von selbst.'],
+    ['search', 'Etwas finden', 'Das Suchfeld auf der Startseite durchsucht deine eigenen Bücher – Titel, Autoren, ISBN, deine Notizen und Zitate. Die Chips darunter listen alles, was du liest, lesen willst, gelesen hast oder dir wünschst.'],
+    ['sparkle', 'Claude fragen', 'Kopiert eine Zusammenfassung deiner Bibliothek (oder eines Buchs) und öffnet Claude für persönliche Empfehlungen – mit deinem normalen Claude-Konto. Die App selbst sendet nichts und kostet nichts.'],
+    ['download', 'Sicherungen', 'Deine Bibliothek ist nur auf diesem Gerät gespeichert. Exportiere in den Einstellungen ab und zu eine Sicherung (auf dem iPhone: In Dateien sichern). Beim Importieren wird die Sicherung zur aktuellen Bibliothek hinzugefügt – so ziehst du auch auf ein anderes Gerät um.'],
+    ['external', 'Installieren und aktualisieren', 'In Safari: Teilen → Zum Home-Bildschirm. Die App funktioniert offline; zum Hinzufügen von Büchern brauchst du Internet. Für eine neue Version die App online öffnen (manchmal zweimal).']
+  ],
+  showWelcome: 'Begrüßung nochmal zeigen',
+  welcomeCards: [
+    ['room', 'Deine Bibliothek zu Hause', 'Jedes Regal, das du anlegst, wird ein Bücherschrank. Deine Bücher stehen darin als Buchrücken – in der Farbe ihrer Cover.'],
+    ['barcode', 'Bücher schnell hinzufügen', 'Scanne den Barcode auf der Rückseite, suche nach dem Titel oder füge einen Satz aus dem Buch ein. Dann bewerten, Notizen schreiben, Zitate sammeln.'],
+    ['download', 'Mach eine Sicherung', 'Deine Bibliothek ist nur auf diesem Gerät. Exportiere ab und zu eine Sicherung in den Einstellungen – die App erinnert dich daran.']
+  ],
+  skip: 'Überspringen',
+  next: 'Weiter',
+  start: 'Los geht’s',
+  swipeHint: 'Wischen für mehr',
+  backupNudge: 'Deine Bibliothek ist nur auf diesem Gerät. Sicherung exportieren?',
+  backupNudgeNever: 'Noch keine Sicherung',
+  exportShort: 'Exportieren',
+  later: 'Später'
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, de };
