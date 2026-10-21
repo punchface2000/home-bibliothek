@@ -1,0 +1,63 @@
+# Home Library
+
+Your bookshelves at home, on your phone: what you own, what you've read, what you want to read, your ratings, notes and favourite quotes. English and German.
+
+**Live:** https://punchface2000.github.io/home-library/
+
+## Install on iPhone
+
+1. Open the link above in **Safari**.
+2. Tap **Share** → **Add to Home Screen**.
+3. Open it from the home screen. After the first load it works offline (adding books needs internet).
+
+To get a new version: open the app while online (sometimes twice).
+
+## How to use
+
+- **Library (home):** one wooden bookcase per shelf. Tap a case to open it. **New shelf** adds one. The chips (Reading, To read, Read, Wishlist) list books by status. The search box searches your own library (title, author, ISBN, notes, quotes).
+- **Shelf:** books as spines on planks. Spine colour comes from the cover, thickness from the page count; a red ribbon marks books you're reading, dashed spines are wishlist books you don't own. German books read bottom-to-top, English ones top-to-bottom. Top-right buttons: covers/spines view, sort, and the shelf menu (rename, move, delete).
+- **Book:** status, half-star rating (tap the same star again to clear), "I own this", shelf, start/finish dates (filled in automatically when you change the status), notes, quotes, description, "More by …", subject chips, and links to Google Books, Goodreads, Amazon and WorldCat.
+- **Add (+):**
+  - **Scan**: point the camera at the barcode on the back of the book. If the camera isn't available, take a photo of the barcode or type the ISBN.
+  - **Search**: title, author or ISBN (Google Books + Open Library).
+  - **Quote**: paste a sentence from a book; Google Books' full-text search finds which book it's from.
+  - **Manual**: for books that aren't in any catalogue.
+- **Ask Claude (✦):** copies a summary of your library (or of one book) and opens Claude, so you get personal recommendations through your normal Claude account. No API key, nothing sent from the app itself.
+- **Settings (⚙):** theme (auto/light/dark), language (auto/English/Deutsch), **backup export/import**.
+
+**Backups:** your library lives only on this device (browser storage). Export a backup now and then (on iPhone: Share → Save to Files). Importing merges a backup into the current library (newer edits win, nothing is deleted), which is also how to move your library to another device.
+
+## Development
+
+```bash
+npm install
+npm run dev      # local dev server
+npm test         # unit tests (Vitest)
+npm run build    # type-check + production build into dist/
+npm run icons    # regenerate PNG icons from public/favicon.svg
+```
+
+Pushing to `main` runs the tests, builds and deploys to GitHub Pages (`.github/workflows/deploy.yml`).
+
+## Files
+
+```
+src/
+  library.ts     books & shelves model, search, sorting, merge, "Ask Claude" prompts (pure, tested)
+  catalog.ts     Google Books + Open Library: parsing, merging, de-duplication (pure, tested)
+  isbn.ts        ISBN-10/13 validation and barcode parsing (pure, tested)
+  color.ts       spine colours from cover pixels, readable text colour (pure, tested)
+  i18n.ts        English and German text (test checks both have the same keys)
+  storage.ts     settings + library in localStorage, backup files (tested)
+  app.ts         shared state, saving, navigation (hash routes)
+  actions.ts     add book, spine colours, backup, Ask Claude
+  covers.ts      reads a cover image to get its colour
+  scanner.ts     camera barcode scanning (BarcodeDetector or bundled ZXing WebAssembly)
+  main.ts        picks the view for the current route
+  views/         home, shelf, book, add, lists, settings
+  ui/            DOM helpers, icons, sheets/toasts, shared components
+  style.css      wood theme, light/dark via CSS variables
+public/          favicon.svg and generated icons
+```
+
+Book data and covers: [Google Books](https://books.google.com) and [Open Library](https://openlibrary.org).
