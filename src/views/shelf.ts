@@ -1,8 +1,8 @@
-/** One shelf: books as spines on wooden planks (or as a grid of covers). */
+/** One shelf: books as spines in a real-looking bookcase (or as a grid of covers). */
 import { back, commit, go, lib, render, settings, t, updateSettings } from '../app';
-import { hash, textOn } from '../color';
-import { spineColor } from '../covers';
-import { deleteShelf, filterBooks, moveShelf, renameShelf, sortBooks, SORT_KEYS, type Book, type SortKey } from '../library';
+import { deleteShelf, filterBooks, moveShelf, renameShelf, sortBooks, SORT_KEYS, type SortKey } from '../library';
+import { fitRows } from '../shelfLayout';
+import { bookcaseEl, caseRows, PLANK_H, ROW_H } from '../ui/bookcase';
 import { coverEl, segmented } from '../ui/components';
 import { h, icon, iconButton } from '../ui/dom';
 import { I } from '../ui/icons';
@@ -11,65 +11,6 @@ import type { View } from '../ui/view';
 
 type Filter = 'all' | 'reading' | 'toread' | 'read' | 'wishlist';
 const filters = new Map<string, Filter>();
-
-const ROW_GAP = 1; // px between spines, keep in sync with .spine-row gap
-
-/** Spine width in px from the page count (thin paperback … thick tome). */
-export function spineWidth(b: Book): number {
-  const pages = b.pages ?? 180 + (hash(b.id) % 260);
-  return Math.round(Math.min(46, Math.max(16, 12 + pages / 22)));
-}
-
-/** Spine height as a fraction of the shelf height, varied a little per book. */
-export function spineHeight(b: Book): number {
-  return 0.74 + (hash(b.title + b.id) % 22) / 100;
-}
-
-const ROW_H = 196; // px, keep in sync with .spine-row height in style.css
-
-function spineEl(b: Book): HTMLElement {
-  const color = spineColor(b);
-  const w = spineWidth(b);
-  // German books print the spine bottom-to-top, English ones top-to-bottom
-  const upward = (b.language ?? '').startsWith('de');
-  const wide = w >= 30;
-  const twoLines = w >= 36 && b.title.length > 18;
-  // show the author's surname only if title and name both fit on the spine
-  const fs = wide ? 12.5 : 11;
-  const textPx = spineHeight(b) * (ROW_H - 12) - 34;
-  const titlePx = (b.title.length * fs * 0.55) / (twoLines ? 2 : 1);
-  const surname = b.authors[0]?.split(/\s+/).pop() ?? '';
-  const showAuthor = wide && !!surname && titlePx + surname.length * fs * 0.62 + 14 < textPx;
-  const style = `--spine:${color};--spine-ink:${textOn(color)};width:${w}px;height:${Math.round(spineHeight(b) * 100)}%`;
-  const cls = ['spine', `st-${b.status}`, b.owned ? '' : 'ghost', upward ? 'up' : '', wide ? 'wide' : '', twoLines ? 'two' : ''].filter(Boolean).join(' ');
-  return h(
-    'button',
-    { class: cls, type: 'button', style, dataset: { book: b.id }, 'aria-label': `${b.title}${b.authors[0] ? `, ${b.authors[0]}` : ''}`, onClick: () => go({ name: 'book', id: b.id }) },
-    h('span', { class: 'spine-band top' }),
-    h('span', { class: 'spine-text' }, h('span', { class: 'spine-title' }, b.title), showAuthor ? h('span', { class: 'spine-author' }, surname) : null),
-    h('span', { class: 'spine-band bottom' }),
-    b.status === 'reading' ? h('span', { class: 'ribbon', 'aria-hidden': 'true' }) : null
-  );
-}
-
-/** Greedy packing of spine widths into rows of a given width. */
-export function packRows(widths: number[], rowWidth: number, gap = ROW_GAP): number[][] {
-  const rows: number[][] = [];
-  let row: number[] = [];
-  let used = 0;
-  widths.forEach((w, i) => {
-    const need = row.length ? w + gap : w;
-    if (row.length && used + need > rowWidth) {
-      rows.push(row);
-      row = [];
-      used = 0;
-    }
-    used += row.length ? w + gap : w;
-    row.push(i);
-  });
-  if (row.length) rows.push(row);
-  return rows;
-}
 
 export function shelfView(id: string): View {
   const shelf = lib.shelves.find((s) => s.id === id);
@@ -84,7 +25,7 @@ export function shelfView(id: string): View {
     settings.sort
   );
 
-  const caseEl = h('div', { class: 'bookcase' });
+  const { el: caseEl, body: caseBody } = bookcaseEl('bookcase-full');
   const content = h('div', { class: 'scroll', dataset: { scroll: `shelf-${id}` } });
 
   const counts: Record<Filter, number> = {
@@ -121,36 +62,42 @@ export function shelfView(id: string): View {
         )
       : null;
 
-  if (!all.length || !shown.length) {
-    content.append(
-      chipRow ?? '',
-      h(
-        'div',
-        { class: 'empty-shelf' },
-        h('div', { class: 'bookcase' }, h('div', { class: 'shelf-row' }, h('div', { class: 'spine-row' })), h('div', { class: 'plank' })),
-        h('p', null, all.length ? t.shelfFilterEmpty : t.shelfEmpty),
-        !all.length ? h('button', { class: 'btn primary', type: 'button', onClick: () => go({ name: 'add', tab: 'scan', shelfId: id }) }, icon(I.plus), t.addBook) : null
-      )
-    );
-  } else if (settings.shelfView === 'covers') {
+  const empty = !shown.length;
+  if (!empty && settings.shelfView === 'covers') {
     content.append(chipRow ?? '', h('div', { class: 'cover-grid' }, ...shown.map((b) => h('button', { class: 'cover-tile', type: 'button', dataset: { book: b.id }, onClick: () => go({ name: 'book', id: b.id }) }, coverEl(b, 'cover-fill'), h('span', { class: 'cover-tile-title' }, b.title)))));
   } else {
-    content.append(chipRow ?? '', caseEl);
+    // an empty shelf still shows the whole bookcase, with a short note above it
+    const note = empty
+      ? h(
+          'div',
+          { class: 'shelf-note' },
+          h('span', null, all.length ? t.shelfFilterEmpty : t.shelfEmpty),
+          !all.length ? h('button', { class: 'btn small primary', type: 'button', onClick: () => go({ name: 'add', tab: 'scan', shelfId: id }) }, icon(I.plus), t.addBook) : null
+        )
+      : null;
+    content.append(chipRow ?? '', note ?? '', caseEl);
   }
 
   function layout(): void {
-    if (settings.shelfView !== 'spines' || !shown.length || !caseEl.isConnected) return;
-    const style = getComputedStyle(caseEl);
-    const inner = caseEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    const rows = packRows(shown.map(spineWidth), inner);
-    // always draw at least 3 planks so a short shelf still looks like a bookcase
-    while (rows.length < 3) rows.push([]);
-    caseEl.replaceChildren(...rows.map((r) => h('div', { class: 'shelf-row' }, h('div', { class: 'spine-row' }, ...r.map((i) => spineEl(shown[i]))), h('div', { class: 'plank' }))));
+    if (!caseEl.isConnected) return;
+    const cs = getComputedStyle(caseBody);
+    const inner = caseBody.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    // fill the visible height with planks, like a real bookcase
+    const crown = (caseEl.firstElementChild as HTMLElement).offsetHeight;
+    const base = (caseEl.lastElementChild as HTMLElement).offsetHeight;
+    const top = caseEl.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+    const avail = content.clientHeight - top - crown - base - 20;
+    const { rows, rowHeight } = fitRows(avail, ROW_H + PLANK_H, PLANK_H, 3);
+    caseBody.replaceChildren(...caseRows({ books: shown, width: inner, rowHeight: Math.min(rowHeight, 240), minRows: rows, seed: id, onBook: (b) => go({ name: 'book', id: b.id }) }));
   }
 
   const rerender = () => render();
 
-  const onResize = () => layout();
+  let resizeTimer = 0;
+  const onResize = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(layout, 120);
+  };
 
   const el = h(
     'div',

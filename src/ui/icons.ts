@@ -16,6 +16,7 @@ export const I = {
   more: s('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>', ' stroke-width="2"'),
   sort: s('<path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"/>'),
   spines: s('<path d="M5 4h3v16H5zM10 6h3v14h-3zM15.5 5.2l2.9-.8 3.6 14.8-2.9.8z"/><path d="M3 20h18"/>'),
+  room: s('<path d="M4 21V4h16v17"/><path d="M4 9.5h16M4 15h16"/><path d="M7 9.5V6.5M9 9.5V6M11 9.5V7M14 15v-3M16 15v-2.5"/><path d="M2 21h20"/>'),
   grid: s('<rect x="4" y="4" width="6.5" height="7" rx="1"/><rect x="13.5" y="4" width="6.5" height="7" rx="1"/><rect x="4" y="14" width="6.5" height="7" rx="1"/><rect x="13.5" y="14" width="6.5" height="7" rx="1"/>'),
   star: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z"/></svg>',
   trash: s('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),

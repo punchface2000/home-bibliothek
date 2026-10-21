@@ -1,6 +1,6 @@
 /** Home: the library room with one bookcase per shelf, search, and quick filters. */
 import { addShelf, countBooks, searchBooks, sortBooks, type Book, type Shelf } from '../library';
-import { commit, go, lib, settings, t } from '../app';
+import { commit, go, lib, settings, t, updateSettings } from '../app';
 import { textOn } from '../color';
 import { spineColor } from '../covers';
 import { bookRow, coverEl } from '../ui/components';
@@ -8,13 +8,15 @@ import { h, icon, iconButton } from '../ui/dom';
 import { I } from '../ui/icons';
 import { promptSheet } from '../ui/overlay';
 import type { View } from '../ui/view';
+import { roomEl } from './room';
 import { askClaudeSheet, settingsSheet } from './settings';
 
 let query = '';
 
 export function homeView(): View {
-  const results = h('div', { class: 'results' });
-  const main = h('div', { class: 'home-main' });
+  const room = settings.homeView === 'room';
+  const results = h('div', { class: 'scroll results-scroll', dataset: { scroll: 'home-search' } }, h('div', { class: 'results' }));
+  const resultsList = results.firstElementChild as HTMLElement;
   const input = h('input', {
     class: 'search-input',
     type: 'search',
@@ -35,44 +37,66 @@ export function homeView(): View {
     input.focus();
   }, 'icon-btn search-clear');
 
+  // the normal home content: the library room, or the grid of cards
+  let roomPart: ReturnType<typeof roomEl> | null = null;
+  let body: HTMLElement;
+  if (room) {
+    roomPart = roomEl();
+    body = h('div', { class: 'home-room' }, h('div', { class: 'home-room-top' }, ...topParts(true)), roomPart.el);
+  } else {
+    const main = h('div', { class: 'home-main' });
+    buildMain(main);
+    body = h('div', { class: 'scroll', dataset: { scroll: 'home' } }, main);
+  }
+
   function update(): void {
     const q = query.trim();
     clearBtn.hidden = !query;
-    main.hidden = !!q;
+    body.hidden = !!q;
     results.hidden = !q;
     if (!q) return;
     const found = searchBooks(lib.books, q);
-    results.replaceChildren(...(found.length ? found.map((b) => bookRow(b)) : [h('p', { class: 'empty-note' }, t.noMatches)]));
+    resultsList.replaceChildren(...(found.length ? found.map((b) => bookRow(b)) : [h('p', { class: 'empty-note' }, t.noMatches)]));
   }
-
-  buildMain(main);
   update();
 
   const el = h(
     'div',
-    { class: 'view view-home' },
+    { class: `view view-home${room ? ' is-room' : ''}` },
     h(
       'header',
       { class: 'topbar' },
       h('h1', { class: 'brand' }, t.appTitle),
-      h('div', { class: 'topbar-actions' }, iconButton(I.sparkle, t.askClaude, () => askClaudeSheet()), iconButton(I.gear, t.settings, () => settingsSheet()))
-    ),
-    h('div', { class: 'search' }, icon(I.search, 'icon search-icon'), input, clearBtn),
-    h('div', { class: 'scroll', dataset: { scroll: 'home' } }, main, results),
-    h('button', { class: 'fab', type: 'button', 'aria-label': t.addBook, title: t.addBook, onClick: () => go({ name: 'add', tab: 'scan' }) }, icon(I.plus))
-  );
-  return { el };
-}
-
-function buildMain(main: HTMLElement): void {
-  const c = countBooks(lib.books);
-  if (!lib.books.length) {
-    main.append(
       h(
         'div',
-        { class: 'welcome' },
+        { class: 'topbar-actions' },
+        iconButton(room ? I.grid : I.room, room ? t.viewGrid : t.viewRoom, () => updateSettings({ homeView: room ? 'grid' : 'room' })),
+        iconButton(I.sparkle, t.askClaude, () => askClaudeSheet()),
+        iconButton(I.gear, t.settings, () => settingsSheet())
+      )
+    ),
+    h('div', { class: 'search' }, icon(I.search, 'icon search-icon'), input, clearBtn),
+    body,
+    results,
+    h('button', { class: 'fab', type: 'button', 'aria-label': t.addBook, title: t.addBook, onClick: () => go({ name: 'add', tab: 'scan' }) }, icon(I.plus))
+  );
+  return {
+    el,
+    mounted: () => roomPart?.mounted(),
+    cleanup: () => roomPart?.cleanup()
+  };
+}
+
+/** Welcome note (empty library) or the status chips. */
+function topParts(compact: boolean): HTMLElement[] {
+  const c = countBooks(lib.books);
+  if (!lib.books.length)
+    return [
+      h(
+        'div',
+        { class: 'welcome' + (compact ? ' compact' : '') },
         h('h2', null, t.emptyTitle),
-        h('p', null, t.emptyText),
+        compact ? null : h('p', null, t.emptyText),
         h(
           'div',
           { class: 'btn-row' },
@@ -80,22 +104,26 @@ function buildMain(main: HTMLElement): void {
           h('button', { class: 'btn', type: 'button', onClick: () => go({ name: 'add', tab: 'search' }) }, icon(I.search), t.searchTitle)
         )
       )
-    );
-  } else {
-    const chips: [string, number, () => void][] = [
-      [t.status.reading, c.reading, () => go({ name: 'list', filter: 'reading' })],
-      [t.status.toread, c.toread, () => go({ name: 'list', filter: 'toread' })],
-      [t.status.read, c.read, () => go({ name: 'list', filter: 'read' })],
-      [t.wishlist, c.wishlist, () => go({ name: 'list', filter: 'wishlist' })],
-      [t.status.abandoned, c.abandoned, () => go({ name: 'list', filter: 'abandoned' })]
     ];
-    main.append(
-      h(
-        'div',
-        { class: 'chips' },
-        ...chips.filter(([, n], i) => n > 0 || i < 3).map(([label, n, run]) => h('button', { class: 'chip', type: 'button', onClick: run }, label, h('b', null, String(n))))
-      )
-    );
+  const chips: [string, number, () => void][] = [
+    [t.status.reading, c.reading, () => go({ name: 'list', filter: 'reading' })],
+    [t.status.toread, c.toread, () => go({ name: 'list', filter: 'toread' })],
+    [t.status.read, c.read, () => go({ name: 'list', filter: 'read' })],
+    [t.wishlist, c.wishlist, () => go({ name: 'list', filter: 'wishlist' })],
+    [t.status.abandoned, c.abandoned, () => go({ name: 'list', filter: 'abandoned' })]
+  ];
+  return [
+    h(
+      'div',
+      { class: 'chips' },
+      ...chips.filter(([, n], i) => n > 0 || i < 3).map(([label, n, run]) => h('button', { class: 'chip', type: 'button', onClick: run }, label, h('b', null, String(n))))
+    )
+  ];
+}
+
+function buildMain(main: HTMLElement): void {
+  main.append(...topParts(false));
+  if (lib.books.length) {
     const reading = lib.books.filter((b) => b.status === 'reading');
     if (reading.length)
       main.append(

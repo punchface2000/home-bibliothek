@@ -12,6 +12,8 @@ export interface Settings {
   theme: Theme;
   lang: LangSetting;
   sort: SortKey;
+  /** home screen: a library room with bookcases, or a grid of cards */
+  homeView: 'room' | 'grid';
   /** how a shelf is shown: as spines on wood, or as a grid of covers */
   shelfView: 'spines' | 'covers';
   /** remembered choices of the last "add book" sheet */
@@ -26,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto',
   lang: 'auto',
   sort: 'author',
+  homeView: 'room',
   shelfView: 'spines',
   lastShelfId: '',
   lastStatus: 'toread',
@@ -45,6 +48,7 @@ export function loadSettings(): Settings {
     if (!['auto', 'light', 'dark'].includes(s.theme)) s.theme = 'auto';
     if (!['auto', 'en', 'de'].includes(s.lang)) s.lang = 'auto';
     if (!['author', 'title', 'added', 'rating'].includes(s.sort)) s.sort = 'author';
+    if (!['room', 'grid'].includes(s.homeView)) s.homeView = 'room';
     if (!['spines', 'covers'].includes(s.shelfView)) s.shelfView = 'spines';
     if (!['toread', 'reading', 'read', 'abandoned'].includes(s.lastStatus)) s.lastStatus = 'toread';
     return s;
