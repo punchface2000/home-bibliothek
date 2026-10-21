@@ -2,7 +2,7 @@
 
 Your bookshelves at home, on your phone: what you own, what you've read, what you want to read, your ratings, notes and favourite quotes. English and German.
 
-**Live:** https://punchface2000.github.io/home-library/
+**Live:** https://punchface2000.github.io/home-bibliothek/
 
 ## Install on iPhone
 
