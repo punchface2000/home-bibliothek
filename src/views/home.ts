@@ -1,5 +1,5 @@
 /** Home: the library room with one bookcase per shelf, search, and quick filters. */
-import { addShelf, countBooks, isDigital, searchBooks, sortBooks, type Book, type Shelf } from '../library';
+import { addShelf, countBooks, isDigital, searchLibrary, sortBooks, type Book, type Shelf } from '../library';
 import { shelfSort } from './shelf';
 import { commit, go, lib, settings, t, updateSettings } from '../app';
 import { textOn } from '../color';
@@ -58,8 +58,12 @@ export function homeView(): View {
     body.hidden = !!q;
     results.hidden = !q;
     if (!q) return;
-    const found = searchBooks(lib.books, q);
-    resultsList.replaceChildren(...(found.length ? found.map((b) => bookRow(b)) : [h('p', { class: 'empty-note' }, t.noMatches)]));
+    const { best, possible } = searchLibrary(lib.books, q);
+    resultsList.replaceChildren(
+      ...best.map((b) => bookRow(b)),
+      ...(possible.length ? [h('h3', { class: 'results-divider' }, best.length ? t.possibleMatches : t.closeMatchesOnly), ...possible.map((b) => bookRow(b))] : []),
+      ...(!best.length && !possible.length ? [h('p', { class: 'empty-note' }, t.noMatches)] : [])
+    );
   }
   update();
 

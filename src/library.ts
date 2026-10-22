@@ -4,6 +4,7 @@
  * Every update returns a new Library object.
  */
 import { isFlexDate } from './dates';
+import { rank, type Field, type Prepared, type Ranked } from './search';
 
 export type Status = 'toread' | 'reading' | 'read' | 'abandoned';
 export const STATUSES: Status[] = ['toread', 'reading', 'read', 'abandoned'];
@@ -374,38 +375,35 @@ export function filterBooks(books: Book[], f: BookFilter): Book[] {
   );
 }
 
+/** What the library search looks at, and how much each part counts. */
+export function bookSearchFields(b: Book): Field[] {
+  return [
+    { text: `${b.title} ${b.subtitle ?? ''}`, weight: 3 },
+    { text: b.authors.join(' '), weight: 3 },
+    { text: b.series ?? '', weight: 2 },
+    { text: b.tags.join(' '), weight: 1.5 },
+    { text: [b.isbn ?? '', b.publisher ?? '', b.lentTo ?? '', b.subjects.join(' '), b.remarks, b.quotes.map((q) => q.text).join(' ')].join(' '), weight: 1, fuzzy: false }
+  ];
+}
+
 /**
- * Search the library. Every word of the query must appear somewhere
- * (title, author, ISBN, subjects, remarks, quotes, publisher).
- * Title and author hits rank higher.
+ * Search the library: words can come from the title, the author or both, in
+ * any order, with small typos. `best` matches every word, `possible` most of them.
  */
-export function searchBooks(books: Book[], query: string): Book[] {
-  const words = normalizeText(query).split(' ').filter(Boolean);
-  if (!words.length) return [];
+export function searchLibrary(books: Book[], query: string): Ranked<Book> {
   const digits = query.replace(/[\s-]/g, '');
-  const scored: { b: Book; s: number }[] = [];
-  for (const b of books) {
-    const title = normalizeText(`${b.title} ${b.subtitle ?? ''}`);
-    const authors = normalizeText(b.authors.join(' '));
-    const rest = normalizeText([b.isbn ?? '', b.publisher ?? '', b.series ?? '', b.lentTo ?? '', b.tags.join(' '), b.subjects.join(' '), b.remarks, b.quotes.map((q) => q.text).join(' ')].join(' '));
-    let score = 0;
-    let all = true;
-    for (const w of words) {
-      if (title.startsWith(w)) score += 6;
-      else if (title.split(' ').some((t) => t.startsWith(w))) score += 4;
-      else if (title.includes(w)) score += 3;
-      else if (authors.split(' ').some((t) => t.startsWith(w))) score += 4;
-      else if (authors.includes(w)) score += 2;
-      else if (rest.includes(w)) score += 1;
-      else {
-        all = false;
-        break;
-      }
-    }
-    if (!all && /^\d{10,13}$/.test(digits) && b.isbn === digits) (all = true), (score = 10);
-    if (all) scored.push({ b, s: score });
+  if (/^\d{10,13}$/.test(digits)) {
+    const hit = books.filter((b) => b.isbn === digits || (b.isbn && b.isbn.endsWith(digits.slice(-9))));
+    if (hit.length) return { best: hit, possible: [] };
   }
-  return scored.sort((x, y) => y.s - x.s || collator.compare(x.b.title, y.b.title)).map((x) => x.b);
+  return rank(books, query, bookSearchFields, { cache: searchCache });
+}
+
+const searchCache = new WeakMap<object, Prepared>();
+
+/** Books matching every word (see searchLibrary for close matches too). */
+export function searchBooks(books: Book[], query: string): Book[] {
+  return searchLibrary(books, query).best;
 }
 
 export type Counts = Record<Status, number> & { total: number; wishlist: number; lent: number };

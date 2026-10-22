@@ -1409,3 +1409,6 @@ svg { display: block; }
 
 .batch-on .scan-box { aspect-ratio: 2 / 1; }
 .batch-on .scan-guide { top: 22%; bottom: 22%; }
+
+.results-divider { margin: 18px 2px 2px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.results-divider:first-child { margin-top: 6px; }

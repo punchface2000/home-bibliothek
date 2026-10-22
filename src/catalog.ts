@@ -5,6 +5,15 @@
  * `fetchJson` so everything can be tested with fixtures.
  */
 import { normalizeText } from './library';
+import { queryWords, rank, type Ranked } from './search';
+
+/** Re-rank catalog results by how well title and author match what was typed. */
+export function rankCatalog(books: CatalogBook[], query: string): Ranked<CatalogBook> {
+  return rank(books, query, (b) => [
+    { text: `${b.title} ${b.subtitle ?? ''}`, weight: 3 },
+    { text: b.authors.join(' '), weight: 3 }
+  ]);
+}
 
 export interface CatalogBook {
   title: string;
@@ -352,7 +361,22 @@ export class Catalog {
       this.google(q),
       this.fetchJson(`${OL}/search.json?q=${encodeURIComponent(q)}&limit=15&fields=${fields}`).then(parseOpenLibrarySearch)
     ]);
-    return dedupeBooks(interleave(g ?? [], o ?? []));
+    let all = dedupeBooks(interleave(g ?? [], o ?? []));
+    // "title author" (or "author title") that found little: ask again with the parts split up
+    const words = queryWords(q);
+    if (words.length >= 2 && rankCatalog(all, q).best.length < 3) {
+      const first = words.slice(0, -1).join(' ');
+      const last = words[words.length - 1];
+      const rest = words.slice(1).join(' ');
+      const extra = await Promise.allSettled([
+        this.google(`intitle:${first} inauthor:${last}`, 10),
+        this.google(`inauthor:${words[0]} intitle:${rest}`, 10),
+        this.fetchJson(`${OL}/search.json?title=${encodeURIComponent(first)}&author=${encodeURIComponent(last)}&limit=10&fields=${fields}`).then(parseOpenLibrarySearch)
+      ]);
+      for (const r of extra) if (r.status === 'fulfilled') all = dedupeBooks([...all, ...r.value]);
+    }
+    const ranked = rankCatalog(all, q);
+    return [...ranked.best, ...ranked.possible, ...all.filter((b) => !ranked.best.includes(b) && !ranked.possible.includes(b))];
   }
 
   /** Find books containing a quote (Google Books full-text search). */

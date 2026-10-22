@@ -1,7 +1,7 @@
 /** Add a book: scan the barcode, search a catalog, search by quote, or enter it by hand. */
 import { addToLibrary, toBookInput } from '../actions';
 import { back, catalog, commit, go, lang, lib, settings, shelfName, t, updateSettings, type AddTab } from '../app';
-import { CatalogError, type CatalogBook } from '../catalog';
+import { CatalogError, rankCatalog, type CatalogBook } from '../catalog';
 import { looksLikeIsbn, normalizeIsbn } from '../isbn';
 import type { ScanSession } from '../scanner';
 import { findDuplicate, removeBook } from '../library';
@@ -292,8 +292,14 @@ function scanPanel(panel: HTMLElement, shelfId?: string): { cleanup: () => void;
 /* Search                                                             */
 /* ------------------------------------------------------------------ */
 
-function resultsInto(list: HTMLElement, books: CatalogBook[], shelfId?: string): void {
-  list.replaceChildren(...(books.length ? books.map((b) => resultRow(b, (c) => previewSheet(c, { shelfId, onAdded: () => resultsInto(list, books, shelfId) }))) : [h('p', { class: 'empty-note' }, t.noResults)]));
+function resultsInto(list: HTMLElement, books: CatalogBook[], shelfId?: string, query?: string): void {
+  const row = (b: CatalogBook) => resultRow(b, (c) => previewSheet(c, { shelfId, onAdded: () => resultsInto(list, books, shelfId, query) }));
+  if (!books.length) return list.replaceChildren(h('p', { class: 'empty-note' }, t.noResults));
+  if (!query) return list.replaceChildren(...books.map(row));
+  // what matches every typed word first, the rest under "Possible matches"
+  const r = rankCatalog(books, query);
+  const rest = books.filter((b) => !r.best.includes(b));
+  list.replaceChildren(...r.best.map(row), ...(rest.length ? [h('h3', { class: 'results-divider' }, t.possibleMatches), ...rest.map(row)] : []));
 }
 
 function searchPanel(panel: HTMLElement, shelfId?: string): { mounted: () => void } {
@@ -322,7 +328,7 @@ function searchPanel(panel: HTMLElement, shelfId?: string): { mounted: () => voi
       } else res = await catalog.search(q);
       if (my !== seq) return;
       memo.searchResults = res;
-      resultsInto(list, res, shelfId);
+      resultsInto(list, res, shelfId, q);
     } catch (e) {
       if (my !== seq) return;
       list.replaceChildren(h('p', { class: 'empty-note' }, errorText(e)));
@@ -341,7 +347,7 @@ function searchPanel(panel: HTMLElement, shelfId?: string): { mounted: () => voi
   panel.append(h('div', { class: 'search search-inline' }, icon(I.search, 'icon search-icon'), input), hint, list);
   if (memo.searchResults.length && memo.search.trim()) {
     hint.hidden = true;
-    resultsInto(list, memo.searchResults, shelfId);
+    resultsInto(list, memo.searchResults, shelfId, memo.search);
   }
   return {
     mounted: () => {
