@@ -8,6 +8,11 @@ import { isFlexDate } from './dates';
 export type Status = 'toread' | 'reading' | 'read' | 'abandoned';
 export const STATUSES: Status[] = ['toread', 'reading', 'read', 'abandoned'];
 
+export type Format = 'paperback' | 'hardcover' | 'ebook' | 'audiobook';
+export const FORMATS: Format[] = ['paperback', 'hardcover', 'ebook', 'audiobook'];
+/** ebooks and audiobooks don't stand on a wooden shelf */
+export const isDigital = (b: Pick<Book, 'format'>): boolean => b.format === 'ebook' || b.format === 'audiobook';
+
 export interface Quote {
   id: string;
   text: string;
@@ -41,6 +46,21 @@ export interface Book {
   finished?: string;
   /** CSS color for the spine, derived from the cover when possible */
   spineColor?: string;
+  /** true if the reader picked the spine colour (don't overwrite it from the cover) */
+  spineManual?: boolean;
+  /** lent out to someone */
+  lentTo?: string;
+  lentSince?: string;
+  /** reading progress for books being read */
+  currentPage?: number;
+  /** series name and number within it (1, 2, 2.5 …) */
+  series?: string;
+  seriesNo?: number;
+  /** free labels across shelves: signed, gift, favourite … */
+  tags: string[];
+  format?: Format;
+  /** position on the shelf when sorting by "My order" */
+  order?: number;
   addedAt: number;
   updatedAt: number;
 }
@@ -78,6 +98,22 @@ export function emptyLibrary(shelfNames: string[], now = Date.now()): Library {
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
+/** Trimmed, de-duplicated (case-insensitive) labels. */
+export function cleanTags(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const t of v) {
+    if (typeof t !== 'string') continue;
+    const tag = t.trim().replace(/\s+/g, ' ').slice(0, 40);
+    const k = tag.toLowerCase();
+    if (!tag || seen.has(k)) continue;
+    seen.add(k);
+    out.push(tag);
+  }
+  return out.slice(0, 20);
+}
+
 export function clampRating(r: unknown): number | undefined {
   const n = num(r);
   if (n === undefined || n <= 0) return undefined;
@@ -107,6 +143,7 @@ export function sanitizeBook(raw: unknown, shelfIds: Set<string>, fallbackShelf:
     owned: typeof r.owned === 'boolean' ? r.owned : true,
     remarks: typeof r.remarks === 'string' ? r.remarks : '',
     quotes,
+    tags: cleanTags(r.tags),
     addedAt: num(r.addedAt) ?? now,
     updatedAt: num(r.updatedAt) ?? num(r.addedAt) ?? now
   };
@@ -123,7 +160,15 @@ export function sanitizeBook(raw: unknown, shelfIds: Set<string>, fallbackShelf:
     rating: clampRating(r.rating),
     started: isFlexDate(r.started) ? r.started : undefined,
     finished: isFlexDate(r.finished) ? r.finished : undefined,
-    spineColor: str(r.spineColor)
+    spineColor: str(r.spineColor),
+    spineManual: r.spineManual === true && !!str(r.spineColor) ? true : undefined,
+    lentTo: str(r.lentTo)?.trim(),
+    lentSince: str(r.lentTo) && isFlexDate(r.lentSince) ? r.lentSince : undefined,
+    currentPage: num(r.currentPage) !== undefined && (r.currentPage as number) > 0 ? Math.round(r.currentPage as number) : undefined,
+    series: str(r.series)?.trim(),
+    seriesNo: str(r.series) && num(r.seriesNo) !== undefined && (r.seriesNo as number) >= 0 ? (r.seriesNo as number) : undefined,
+    format: FORMATS.includes(r.format as Format) ? (r.format as Format) : undefined,
+    order: num(r.order)
   };
   for (const [k, v] of Object.entries(opt)) if (v !== undefined) (book as unknown as Record<string, unknown>)[k] = v;
   return book;
@@ -253,8 +298,8 @@ export function findDuplicate(lib: Library, cand: { isbn?: string; title: string
 /* Sorting, searching, counting                                       */
 /* ------------------------------------------------------------------ */
 
-export type SortKey = 'author' | 'title' | 'added' | 'rating';
-export const SORT_KEYS: SortKey[] = ['author', 'title', 'added', 'rating'];
+export type SortKey = 'author' | 'title' | 'added' | 'rating' | 'manual';
+export const SORT_KEYS: SortKey[] = ['author', 'title', 'added', 'rating', 'manual'];
 
 /** "Thomas Mann" → "mann thomas", "Mann, Thomas" → "mann thomas". */
 export function authorSortKey(name: string | undefined): string {
@@ -273,13 +318,25 @@ export function titleSortKey(title: string): string {
 
 const collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
 
+/** Within one author: series first (grouped by series name), then standalone books by year. */
+function seriesKey(b: Book, year: number | undefined): string {
+  return b.series ? `0 ${normalizeText(b.series)}` : `1 ${String(year ?? 0).padStart(4, '0')}`;
+}
+
 export function sortBooks(books: Book[], key: SortKey): Book[] {
   const byTitle = (a: Book, b: Book) => collator.compare(titleSortKey(a.title), titleSortKey(b.title));
   const cmp: Record<SortKey, (a: Book, b: Book) => number> = {
-    author: (a, b) => collator.compare(authorSortKey(a.authors[0]), authorSortKey(b.authors[0])) || (a.year ?? 0) - (b.year ?? 0) || byTitle(a, b),
+    // same author: books of a series stay together and in order, then the rest by year
+    author: (a, b) =>
+      collator.compare(authorSortKey(a.authors[0]), authorSortKey(b.authors[0])) ||
+      collator.compare(seriesKey(a, a.year), seriesKey(b, b.year)) ||
+      (a.seriesNo ?? 0) - (b.seriesNo ?? 0) ||
+      (a.year ?? 0) - (b.year ?? 0) ||
+      byTitle(a, b),
     title: byTitle,
     added: (a, b) => b.addedAt - a.addedAt,
-    rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || byTitle(a, b)
+    rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || byTitle(a, b),
+    manual: (a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.addedAt - b.addedAt
   };
   return [...books].sort(cmp[key]);
 }
@@ -288,11 +345,22 @@ export interface BookFilter {
   status?: Status;
   shelfId?: string;
   owned?: boolean;
+  lent?: boolean;
+  tag?: string;
+  series?: string;
 }
 
 export function filterBooks(books: Book[], f: BookFilter): Book[] {
+  const tag = f.tag?.toLowerCase();
+  const series = f.series ? normalizeText(f.series) : undefined;
   return books.filter(
-    (b) => (f.status === undefined || b.status === f.status) && (f.shelfId === undefined || b.shelfId === f.shelfId) && (f.owned === undefined || b.owned === f.owned)
+    (b) =>
+      (f.status === undefined || b.status === f.status) &&
+      (f.shelfId === undefined || b.shelfId === f.shelfId) &&
+      (f.owned === undefined || b.owned === f.owned) &&
+      (f.lent === undefined || !!b.lentTo === f.lent) &&
+      (tag === undefined || b.tags.some((x) => x.toLowerCase() === tag)) &&
+      (series === undefined || (!!b.series && normalizeText(b.series) === series))
   );
 }
 
@@ -309,7 +377,7 @@ export function searchBooks(books: Book[], query: string): Book[] {
   for (const b of books) {
     const title = normalizeText(`${b.title} ${b.subtitle ?? ''}`);
     const authors = normalizeText(b.authors.join(' '));
-    const rest = normalizeText([b.isbn ?? '', b.publisher ?? '', b.subjects.join(' '), b.remarks, b.quotes.map((q) => q.text).join(' ')].join(' '));
+    const rest = normalizeText([b.isbn ?? '', b.publisher ?? '', b.series ?? '', b.lentTo ?? '', b.tags.join(' '), b.subjects.join(' '), b.remarks, b.quotes.map((q) => q.text).join(' ')].join(' '));
     let score = 0;
     let all = true;
     for (const w of words) {
@@ -330,15 +398,116 @@ export function searchBooks(books: Book[], query: string): Book[] {
   return scored.sort((x, y) => y.s - x.s || collator.compare(x.b.title, y.b.title)).map((x) => x.b);
 }
 
-export type Counts = Record<Status, number> & { total: number; wishlist: number };
+export type Counts = Record<Status, number> & { total: number; wishlist: number; lent: number };
 
 export function countBooks(books: Book[]): Counts {
-  const c: Counts = { toread: 0, reading: 0, read: 0, abandoned: 0, total: books.length, wishlist: 0 };
+  const c: Counts = { toread: 0, reading: 0, read: 0, abandoned: 0, total: books.length, wishlist: 0, lent: 0 };
   for (const b of books) {
     c[b.status]++;
     if (!b.owned) c.wishlist++;
+    if (b.lentTo) c.lent++;
   }
   return c;
+}
+
+/* ------------------------------------------------------------------ */
+/* Several books at once                                              */
+/* ------------------------------------------------------------------ */
+
+export function moveBooks(lib: Library, ids: Iterable<string>, shelfId: string, now = Date.now()): Library {
+  if (!lib.shelves.some((s) => s.id === shelfId)) return lib;
+  const set = new Set(ids);
+  return { ...lib, books: lib.books.map((b) => (set.has(b.id) && b.shelfId !== shelfId ? { ...b, shelfId, order: undefined, updatedAt: now } : b)) };
+}
+
+export function removeBooks(lib: Library, ids: Iterable<string>): Library {
+  const set = new Set(ids);
+  return { ...lib, books: lib.books.filter((b) => !set.has(b.id)) };
+}
+
+/** Save "My order" for a shelf: the books get positions 0, 1, 2 … in the given order. */
+export function setShelfOrder(lib: Library, orderedIds: string[], now = Date.now()): Library {
+  const pos = new Map(orderedIds.map((id, i) => [id, i]));
+  return { ...lib, books: lib.books.map((b) => (pos.has(b.id) && b.order !== pos.get(b.id) ? { ...b, order: pos.get(b.id), updatedAt: now } : b)) };
+}
+
+/** Move `id` so it sits before `beforeId` (or at the end if beforeId is null) in a list of ids. */
+export function reorderIds(ids: string[], id: string, beforeId: string | null): string[] {
+  const rest = ids.filter((x) => x !== id);
+  const i = beforeId === null ? rest.length : rest.indexOf(beforeId);
+  rest.splice(i < 0 ? rest.length : i, 0, id);
+  return rest;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tags and series                                                    */
+/* ------------------------------------------------------------------ */
+
+/** All tags in use, most used first. */
+export function allTags(books: Book[]): { tag: string; count: number }[] {
+  const m = new Map<string, { tag: string; count: number }>();
+  for (const b of books)
+    for (const t of b.tags) {
+      const k = t.toLowerCase();
+      const e = m.get(k) ?? { tag: t, count: 0 };
+      e.count++;
+      m.set(k, e);
+    }
+  return [...m.values()].sort((a, b) => b.count - a.count || collator.compare(a.tag, b.tag));
+}
+
+/** Books of a series in reading order. */
+export function seriesBooks(books: Book[], series: string): Book[] {
+  return filterBooks(books, { series }).sort((a, b) => (a.seriesNo ?? 1e9) - (b.seriesNo ?? 1e9) || (a.year ?? 0) - (b.year ?? 0));
+}
+
+/**
+ * The next volume after `b`: the library book with the next number if there is
+ * one, otherwise just the number that's missing (so the app can offer a search).
+ */
+export function nextInSeries(books: Book[], b: Book): { book?: Book; no: number } | null {
+  if (!b.series || b.seriesNo === undefined) return null;
+  const later = seriesBooks(books, b.series).filter((x) => x.seriesNo !== undefined && x.seriesNo > b.seriesNo!);
+  const wanted = Math.floor(b.seriesNo) + 1;
+  const exact = later.find((x) => x.seriesNo === wanted);
+  return exact ? { book: exact, no: wanted } : { no: wanted };
+}
+
+/** Existing series names (for suggestions while typing). */
+export function allSeries(books: Book[]): string[] {
+  const m = new Map<string, string>();
+  for (const b of books) if (b.series) m.set(normalizeText(b.series), b.series);
+  return [...m.values()].sort(collator.compare);
+}
+
+/* ------------------------------------------------------------------ */
+/* Pick something to read                                             */
+/* ------------------------------------------------------------------ */
+
+/** Books worth suggesting: owned to-read books first; if there are none, the wishlist. */
+export function readNextPool(books: Book[]): Book[] {
+  const toread = books.filter((b) => b.status === 'toread');
+  const owned = toread.filter((b) => b.owned && !b.lentTo);
+  return owned.length ? owned : toread;
+}
+
+/** A random pick from the pool, never the same book twice in a row if there's a choice. */
+export function pickRandom<T extends { id: string }>(pool: T[], random: () => number = Math.random, avoidId?: string): T | undefined {
+  if (!pool.length) return undefined;
+  const choices = pool.length > 1 && avoidId ? pool.filter((b) => b.id !== avoidId) : pool;
+  return choices[Math.min(choices.length - 1, Math.floor(random() * choices.length))];
+}
+
+/* ------------------------------------------------------------------ */
+/* Sharing the wishlist                                               */
+/* ------------------------------------------------------------------ */
+
+export function wishlistText(books: Book[], lang: Lang): string {
+  const wish = sortBooks(books.filter((b) => !b.owned), 'author');
+  const head = lang === 'de' ? 'Meine Bücher-Wunschliste' : 'My book wishlist';
+  if (!wish.length) return head;
+  const lines = wish.map((b) => `• ${b.title}${b.authors.length ? ` — ${b.authors.join(', ')}` : ''}${b.isbn ? ` (ISBN ${b.isbn})` : ''}`);
+  return `${head}\n\n${lines.join('\n')}`;
 }
 
 /* ------------------------------------------------------------------ */
