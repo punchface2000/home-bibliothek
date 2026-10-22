@@ -66,6 +66,13 @@ describe('sanitizeLibrary', () => {
     expect(b.quotes).toEqual([]);
   });
 
+  it('keeps partial reading dates (year, month) and drops invalid ones', () => {
+    const lib = sanitizeLibrary({ shelves: [{ id: 's', name: 'S' }], books: [{ title: 'A', started: '2019', finished: '2019-03' }, { title: 'B', started: '2019-13', finished: '14.3.2019' }] }, ['X']);
+    expect(lib.books[0]).toMatchObject({ started: '2019', finished: '2019-03' });
+    expect(lib.books[1].started).toBeUndefined();
+    expect(lib.books[1].finished).toBeUndefined();
+  });
+
   it('keeps at least one shelf', () => {
     const lib = sanitizeLibrary({ shelves: [], books: [{ title: 'x' }] }, ['Default']);
     expect(lib.shelves[0].name).toBe('Default');

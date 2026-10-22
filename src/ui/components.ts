@@ -1,10 +1,11 @@
 /** Reusable pieces: covers, stars, segmented controls, rows, the "add to shelf" sheet, the book form. */
 import { addToLibrary, toBookInput, type Placement } from '../actions';
-import { catalog, go, lib, settings, shelfName, t } from '../app';
+import { catalog, go, lang, lib, settings, shelfName, t } from '../app';
 import type { CatalogBook } from '../catalog';
 import { largerCover } from '../catalog';
 import { textOn } from '../color';
 import { spineColor } from '../covers';
+import { datesConflict, formatFlexDate, parseFlexDate, todayFlex, type FlexDate } from '../dates';
 import { normalizeIsbn } from '../isbn';
 import { findDuplicate, ratingFromX, STATUSES, type Book, type BookInput, type Status } from '../library';
 import { h, icon } from './dom';
@@ -65,7 +66,7 @@ export function ratingInput(value: number | undefined, onChange: (v: number | un
   const set = (v: number | undefined) => {
     current = v;
     fill.style.width = `${((v ?? 0) / 5) * 100}%`;
-    label.textContent = v ? `${String(v).replace('.', lang() === 'de' ? ',' : '.')}` : '–';
+    label.textContent = v ? `${String(v).replace('.', lang === 'de' ? ',' : '.')}` : '–';
   };
   set(value);
   wrap.addEventListener('click', (e) => {
@@ -78,7 +79,6 @@ export function ratingInput(value: number | undefined, onChange: (v: number | un
   return h('div', { class: 'rating-input', role: 'slider', 'aria-label': t.rating, 'aria-valuemin': '0', 'aria-valuemax': '5' }, wrap, label);
 }
 
-const lang = () => document.documentElement.lang;
 
 /* ------------------------------------------------------------------ */
 /* Controls                                                           */
@@ -180,18 +180,148 @@ export function defaultPlacement(shelfId?: string, owned?: boolean): Placement {
   };
 }
 
-export function placementControls(place: Placement): HTMLElement {
-  return h(
+/* ------------------------------------------------------------------ */
+/* Reading dates: optional, as precise as you remember                */
+/* ------------------------------------------------------------------ */
+
+export interface DateRange {
+  el: HTMLElement;
+  /** false (and a message shown) if a field can't be read or the order is wrong */
+  valid(): boolean;
+  /** show only the fields that make sense for a status */
+  showFor(status: Status | 'all'): void;
+}
+
+/**
+ * "Started" and "Finished" fields that accept 2019, 3.2019 or 14.3.2019.
+ * Each has a "Today" shortcut. `onChange` gets the stored values
+ * (undefined = empty) whenever both fields are valid.
+ */
+export function dateRange(init: { started?: FlexDate; finished?: FlexDate }, onChange: (v: { started?: FlexDate; finished?: FlexDate }) => void): DateRange {
+  const msg = h('p', { class: 'date-msg', role: 'alert' });
+  const values = { started: init.started, finished: init.finished };
+
+  const makeField = (key: 'started' | 'finished', label: string) => {
+    const input = h('input', {
+      class: 'input date',
+      type: 'text',
+      inputmode: 'decimal',
+      autocomplete: 'off',
+      enterkeyhint: 'done',
+      placeholder: t.datePlaceholder,
+      value: formatFlexDate(values[key], lang),
+      'aria-label': label
+    });
+    const commitField = () => {
+      const r = parseFlexDate(input.value);
+      if (r === null) return check();
+      values[key] = r || undefined;
+      input.value = formatFlexDate(values[key], lang);
+      if (check()) onChange({ ...values });
+    };
+    input.addEventListener('change', commitField);
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && input.blur());
+    // clear the warning as soon as the text becomes readable
+    input.addEventListener('input', () => {
+      if (msg.textContent && parseFlexDate(input.value) !== null) check();
+    });
+    const today = h(
+      'button',
+      {
+        class: 'link small date-today',
+        type: 'button',
+        onClick: () => {
+          input.value = formatFlexDate(todayFlex(), lang);
+          commitField();
+        }
+      },
+      t.today
+    );
+    const field = h('div', { class: 'field' }, h('div', { class: 'field-label-row' }, h('span', null, label), today), input);
+    return { field, input };
+  };
+
+  const startF = makeField('started', t.started);
+  const finishF = makeField('finished', t.finished);
+
+  function check(): boolean {
+    const bad: string[] = [];
+    for (const f of [startF, finishF]) {
+      const ok = f.field.hidden || parseFlexDate(f.input.value) !== null;
+      f.input.classList.toggle('bad', !ok);
+      if (!ok) bad.push(f.input.getAttribute('aria-label')!);
+    }
+    if (bad.length) {
+      msg.textContent = t.dateInvalid;
+      return false;
+    }
+    const st = startF.field.hidden ? undefined : values.started;
+    const fi = finishF.field.hidden ? undefined : values.finished;
+    if (datesConflict(st, fi)) {
+      finishF.input.classList.add('bad');
+      msg.textContent = t.dateOrder;
+      return false;
+    }
+    msg.textContent = '';
+    return true;
+  }
+
+  const el = h('div', { class: 'date-range' }, h('div', { class: 'dates' }, startF.field, finishF.field), msg, h('p', { class: 'muted small date-hint' }, t.dateHint));
+
+  return {
+    el,
+    valid() {
+      // pick up anything typed but not yet committed (e.g. tapping "Add" straight away)
+      for (const [key, f] of [['started', startF], ['finished', finishF]] as const) {
+        const r = parseFlexDate(f.input.value);
+        if (r !== null) values[key] = r || undefined;
+      }
+      const ok = check();
+      if (ok) onChange({ started: startF.field.hidden ? undefined : values.started, finished: finishF.field.hidden ? undefined : values.finished });
+      return ok;
+    },
+    showFor(status) {
+      startF.field.hidden = status === 'toread';
+      finishF.field.hidden = status !== 'read' && status !== 'all';
+      el.hidden = startF.field.hidden && finishF.field.hidden;
+      check();
+    }
+  };
+}
+
+export interface PlacementUI {
+  el: HTMLElement;
+  valid(): boolean;
+}
+
+export function placementControls(place: Placement): PlacementUI {
+  const dates = dateRange({}, (v) => {
+    place.started = v.started;
+    place.finished = v.finished;
+  });
+  dates.showFor(place.status);
+  const el = h(
     'div',
     { class: 'placement' },
     h('label', { class: 'field' }, h('span', null, t.shelf), shelfSelect(place.shelfId, (id) => (place.shelfId = id))),
-    h('div', { class: 'field' }, h('span', null, t.statusLabel), statusSeg(place.status, (s) => (place.status = s))),
+    h(
+      'div',
+      { class: 'field' },
+      h('span', null, t.statusLabel),
+      statusSeg(place.status, (st) => {
+        place.status = st;
+        dates.showFor(st);
+      })
+    ),
+    dates.el,
     toggleEl(place.owned, t.owned, (v) => (place.owned = v))
   );
+  return { el, valid: () => dates.valid() };
 }
 
 export function previewSheet(c: CatalogBook, opts: { shelfId?: string; owned?: boolean; onAdded?: (b: Book) => void; onClose?: () => void } = {}): void {
   const place = defaultPlacement(opts.shelfId, opts.owned);
+  const placeUI = placementControls(place);
   let added = false;
   openSheet(
     t.addToShelf,
@@ -223,7 +353,7 @@ export function previewSheet(c: CatalogBook, opts: { shelfId?: string; owned?: b
               h('button', { class: 'btn small', type: 'button', onClick: () => (close(), go({ name: 'book', id: dup.id })) }, t.open)
             )
           : '',
-        placementControls(place),
+        placeUI.el,
         h(
           'div',
           { class: 'btn-row' },
@@ -234,6 +364,7 @@ export function previewSheet(c: CatalogBook, opts: { shelfId?: string; owned?: b
               class: 'btn primary',
               type: 'button',
               onClick: () => {
+                if (!placeUI.valid()) return;
                 added = true;
                 const book = addToLibrary(toBookInput(c), place);
                 close();

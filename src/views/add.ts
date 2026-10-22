@@ -257,9 +257,10 @@ function manualPanel(panel: HTMLElement, shelfId?: string): void {
   const form = bookForm(memoManual);
   memoManual = {};
   const place = defaultPlacement(shelfId);
+  const placeUI = placementControls(place);
   panel.append(
     form.el,
-    placementControls(place),
+    placeUI.el,
     h(
       'button',
       {
@@ -267,7 +268,7 @@ function manualPanel(panel: HTMLElement, shelfId?: string): void {
         type: 'button',
         onClick: () => {
           const v = form.read();
-          if (!v) return;
+          if (!v || !placeUI.valid()) return;
           // hand-entered books are assumed to be in the app's language (affects spine text direction)
           const book = addToLibrary({ ...v, language: lang }, place);
           toast(t.added(shelfName(place.shelfId)));

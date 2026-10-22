@@ -16,7 +16,7 @@ To get a new version: open the app while online (sometimes twice).
 
 - **Library (home):** a library room — your bookcases stand along a wall with lamps and a wooden floor; swipe sideways to walk along, tap a bookcase to open it, the dashed alcove at the end adds a shelf. The button top-right switches to a compact card view and back. The chips (Reading, To read, Read, Wishlist) list books by status. The search box searches your own library (title, author, ISBN, notes, quotes).
 - **Shelf:** a full bookcase (crown, planks filling the screen, plinth) with books as spines; free space gets bookends and the odd ornament (globe, plant, clock…), so even an empty shelf looks like real furniture. Spine colour comes from the cover, thickness from the page count; a red ribbon marks books you're reading, dashed spines are wishlist books you don't own. German books read bottom-to-top, English ones top-to-bottom. Top-right buttons: covers/spines view, sort, and the shelf menu (rename, move, delete).
-- **Book:** status, half-star rating (tap the same star again to clear), "I own this", shelf, start/finish dates (filled in automatically when you change the status), notes, quotes, description, "More by …", subject chips, and links to Google Books, Goodreads, Amazon and WorldCat.
+- **Book:** status, half-star rating (tap the same star again to clear), "I own this", shelf, optional start/finish dates (a year `2019`, month and year `3.2019`, or a full date `14.3.2019`; a "Today" shortcut next to each), notes, quotes, description, "More by …", subject chips, and links to Google Books, Goodreads, Amazon and WorldCat.
 - **Add (+):**
   - **Scan**: point the camera at the barcode on the back of the book. If the camera isn't available, take a photo of the barcode or type the ISBN.
   - **Search**: title, author or ISBN (Google Books + Open Library).
@@ -47,6 +47,7 @@ src/
   shelfLayout.ts spine sizes, packing books onto planks, bookends & ornaments (pure, tested)
   library.ts     books & shelves model, search, sorting, merge, "Ask Claude" prompts (pure, tested)
   catalog.ts     Google Books + Open Library: parsing, merging, de-duplication (pure, tested)
+  dates.ts       flexible reading dates: parse "2019", "3.2019", "14.3.2019", "März 2019" (pure, tested)
   isbn.ts        ISBN-10/13 validation and barcode parsing (pure, tested)
   color.ts       spine colours from cover pixels, readable text colour (pure, tested)
   i18n.ts        English and German text (test checks both have the same keys)

@@ -2,8 +2,8 @@
 import { coverChanged } from '../actions';
 import { back, commit, go, lib, render, shelfName, t } from '../app';
 import { addQuote, removeBook, removeQuote, updateBook, type Book, type Status } from '../library';
-import { bookForm, coverEl, ratingInput, shelfSelect, statusSeg, toggleEl } from '../ui/components';
-import { debounce, h, icon, iconButton, todayIso } from '../ui/dom';
+import { bookForm, coverEl, dateRange, ratingInput, shelfSelect, statusSeg, toggleEl } from '../ui/components';
+import { debounce, h, icon, iconButton } from '../ui/dom';
 import { I } from '../ui/icons';
 import { confirmSheet, openSheet, toast } from '../ui/overlay';
 import type { View } from '../ui/view';
@@ -19,16 +19,11 @@ export function bookView(id: string): View {
   /** save without redrawing (keeps focus and scroll) */
   const patch = (p: Partial<Book>) => commit(updateBook(lib, id, p), false);
 
-  // dates: filled in automatically when the status changes, editable by hand
-  const started = h('input', { class: 'input date', type: 'date', value: book.started ?? '', 'aria-label': t.started, onChange: () => patch({ started: started.value || undefined }) });
-  const finished = h('input', { class: 'input date', type: 'date', value: book.finished ?? '', 'aria-label': t.finished, onChange: () => patch({ finished: finished.value || undefined }) });
+  // reading dates: optional, as precise as you remember (2019, 3.2019, 14.3.2019)
+  const dates = dateRange({ started: book.started, finished: book.finished }, (v) => patch({ started: v.started, finished: v.finished }));
+  dates.showFor('all');
 
-  const onStatus = (s: Status) => {
-    const p: Partial<Book> = { status: s };
-    if (s === 'reading' && !b().started) started.value = p.started = todayIso();
-    if (s === 'read' && !b().finished) finished.value = p.finished = todayIso();
-    patch(p);
-  };
+  const onStatus = (s: Status) => patch({ status: s });
 
   const saveRemarks = debounce((v: string) => patch({ remarks: v }), 400);
   const remarks = h('textarea', {
@@ -120,7 +115,7 @@ export function bookView(id: string): View {
         { class: 'card' },
         toggleEl(book.owned, t.owned, (v) => patch({ owned: v })),
         h('label', { class: 'field-inline' }, h('span', null, t.shelf), shelfSelect(book.shelfId, (sid) => patch({ shelfId: sid }))),
-        h('div', { class: 'dates' }, h('label', { class: 'field' }, h('span', null, t.started), started), h('label', { class: 'field' }, h('span', null, t.finished), finished))
+        dates.el
       ),
       h('section', { class: 'card' }, h('h2', { class: 'card-title' }, t.remarks), remarks),
       h(

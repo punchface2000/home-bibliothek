@@ -3,6 +3,7 @@
  * the "Ask Claude" prompt builders. Pure logic, no DOM, no storage.
  * Every update returns a new Library object.
  */
+import { isFlexDate } from './dates';
 
 export type Status = 'toread' | 'reading' | 'read' | 'abandoned';
 export const STATUSES: Status[] = ['toread', 'reading', 'read', 'abandoned'];
@@ -35,7 +36,7 @@ export interface Book {
   rating?: number;
   remarks: string;
   quotes: Quote[];
-  /** YYYY-MM-DD */
+  /** YYYY, YYYY-MM or YYYY-MM-DD — as precise as the reader remembers */
   started?: string;
   finished?: string;
   /** CSS color for the spine, derived from the cover when possible */
@@ -76,7 +77,6 @@ export function emptyLibrary(shelfNames: string[], now = Date.now()): Library {
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function clampRating(r: unknown): number | undefined {
   const n = num(r);
@@ -121,8 +121,8 @@ export function sanitizeBook(raw: unknown, shelfIds: Set<string>, fallbackShelf:
     coverUrl: str(r.coverUrl),
     infoUrl: str(r.infoUrl),
     rating: clampRating(r.rating),
-    started: typeof r.started === 'string' && DATE_RE.test(r.started) ? r.started : undefined,
-    finished: typeof r.finished === 'string' && DATE_RE.test(r.finished) ? r.finished : undefined,
+    started: isFlexDate(r.started) ? r.started : undefined,
+    finished: isFlexDate(r.finished) ? r.finished : undefined,
     spineColor: str(r.spineColor)
   };
   for (const [k, v] of Object.entries(opt)) if (v !== undefined) (book as unknown as Record<string, unknown>)[k] = v;

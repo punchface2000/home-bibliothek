@@ -10,6 +10,9 @@ export interface Placement {
   shelfId: string;
   status: Status;
   owned: boolean;
+  /** optional reading dates (YYYY, YYYY-MM or YYYY-MM-DD) */
+  started?: string;
+  finished?: string;
 }
 
 /** Catalog result → library book (keeps only fields we store). */
@@ -19,11 +22,11 @@ export function toBookInput(c: CatalogBook): BookInput {
 }
 
 export function addToLibrary(input: BookInput, place: Placement): Book {
-  const today = new Date();
-  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const extra: Partial<Book> = {};
-  if (place.status === 'reading') extra.started = iso;
-  const { lib: next, book } = addBook(lib, { ...input, ...extra, shelfId: place.shelfId, status: place.status, owned: place.owned });
+  // dates are only what the reader entered; nothing is filled in automatically
+  const dates: Partial<Book> = {};
+  if (place.started && place.status !== 'toread') dates.started = place.started;
+  if (place.finished && place.status === 'read') dates.finished = place.finished;
+  const { lib: next, book } = addBook(lib, { ...input, ...dates, shelfId: place.shelfId, status: place.status, owned: place.owned });
   commit(next);
   updateSettings({ lastShelfId: place.shelfId, lastStatus: place.status, lastOwned: place.owned }, false);
   requestPersistentStorage();

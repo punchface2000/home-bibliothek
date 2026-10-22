@@ -1207,3 +1207,13 @@ svg { display: block; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 .help-icon svg:not([fill]), .tour-icon svg:not([fill]) { fill: currentColor; }
+
+/* reading dates */
+.date-range { display: flex; flex-direction: column; gap: 6px; }
+.field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.field-label-row > span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.date-today { font-size: 12.5px; padding: 4px 0; text-decoration: none; }
+.input.bad { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+.date-msg { color: var(--danger); font-size: 13px; }
+.date-msg:empty { display: none; }
+.date-hint { font-size: 12px; line-height: 1.4; }
