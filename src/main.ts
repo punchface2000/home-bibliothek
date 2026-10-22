@@ -10,7 +10,8 @@ import type { View } from './ui/view';
 import { addView } from './views/add';
 import { bookView } from './views/book';
 import { homeView } from './views/home';
-import { findView, listView } from './views/lists';
+import { findView, groupView, listView } from './views/lists';
+import { statsView } from './views/stats';
 import { showWelcome } from './views/help';
 import { shelfView } from './views/shelf';
 
@@ -33,6 +34,10 @@ function build(): View {
       return findView(r.kind, r.value);
     case 'list':
       return listView(r.filter);
+    case 'group':
+      return groupView(r.kind, r.value);
+    case 'stats':
+      return statsView();
     default:
       return homeView();
   }

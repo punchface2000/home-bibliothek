@@ -69,6 +69,8 @@ export interface Shelf {
   id: string;
   name: string;
   createdAt: number;
+  /** how this shelf is sorted; undefined = the app-wide default */
+  sort?: SortKey;
 }
 
 export interface Library {
@@ -182,7 +184,11 @@ export function sanitizeLibrary(raw: unknown, defaultShelfNames: string[], now =
   const shelves: Shelf[] = Array.isArray(r.shelves)
     ? r.shelves
         .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
-        .map((s) => ({ id: str(s.id) ?? newId(), name: (str(s.name) ?? 'Shelf').trim(), createdAt: num(s.createdAt) ?? now }))
+        .map((s) => {
+          const shelf: Shelf = { id: str(s.id) ?? newId(), name: (str(s.name) ?? 'Shelf').trim(), createdAt: num(s.createdAt) ?? now };
+          if (SORT_KEYS.includes(s.sort as SortKey)) shelf.sort = s.sort as SortKey;
+          return shelf;
+        })
         .filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)))
     : [];
   if (!shelves.length) shelves.push(...emptyLibrary(defaultShelfNames.slice(0, 1), now).shelves);
@@ -207,6 +213,10 @@ export function renameShelf(lib: Library, id: string, name: string): Library {
   const n = name.trim();
   if (!n) return lib;
   return { ...lib, shelves: lib.shelves.map((s) => (s.id === id ? { ...s, name: n } : s)) };
+}
+
+export function setShelfSort(lib: Library, id: string, sort: SortKey): Library {
+  return { ...lib, shelves: lib.shelves.map((s) => (s.id === id ? { ...s, sort } : s)) };
 }
 
 /** Move a shelf one step left (-1) or right (+1) in the library. */

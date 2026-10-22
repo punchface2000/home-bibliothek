@@ -1,5 +1,6 @@
 /** Home: the library room with one bookcase per shelf, search, and quick filters. */
-import { addShelf, countBooks, searchBooks, sortBooks, type Book, type Shelf } from '../library';
+import { addShelf, countBooks, isDigital, searchBooks, sortBooks, type Book, type Shelf } from '../library';
+import { shelfSort } from './shelf';
 import { commit, go, lib, settings, t, updateSettings } from '../app';
 import { textOn } from '../color';
 import { spineColor } from '../covers';
@@ -10,7 +11,8 @@ import { promptSheet } from '../ui/overlay';
 import type { View } from '../ui/view';
 import { roomEl } from './room';
 import { backupReminder, helpSheet } from './help';
-import { askClaudeSheet, settingsSheet } from './settings';
+import { discoverSheet } from './discover';
+import { settingsSheet } from './settings';
 
 let query = '';
 
@@ -72,7 +74,7 @@ export function homeView(): View {
         'div',
         { class: 'topbar-actions' },
         iconButton(room ? I.grid : I.room, room ? t.viewGrid : t.viewRoom, () => updateSettings({ homeView: room ? 'grid' : 'room' })),
-        iconButton(I.sparkle, t.askClaude, () => askClaudeSheet()),
+        iconButton(I.sparkle, t.discoverTitle, () => discoverSheet()),
         iconButton(I.help, t.help, () => helpSheet()),
         iconButton(I.gear, t.settings, () => settingsSheet())
       )
@@ -112,6 +114,7 @@ function topParts(compact: boolean): HTMLElement[] {
     [t.status.toread, c.toread, () => go({ name: 'list', filter: 'toread' })],
     [t.status.read, c.read, () => go({ name: 'list', filter: 'read' })],
     [t.wishlist, c.wishlist, () => go({ name: 'list', filter: 'wishlist' })],
+    [t.lentOut, c.lent, () => go({ name: 'list', filter: 'lent' })],
     [t.status.abandoned, c.abandoned, () => go({ name: 'list', filter: 'abandoned' })]
   ];
   const nudge = backupReminder();
@@ -140,6 +143,7 @@ function buildMain(main: HTMLElement): void {
               'button',
               { class: 'reading-item', type: 'button', dataset: { book: b.id }, onClick: () => go({ name: 'book', id: b.id }) },
               coverEl(b, 'cover-sm'),
+              b.pages && b.currentPage ? h('span', { class: 'mini-progress' }, h('span', { style: `width:${Math.min(100, Math.round((b.currentPage / b.pages) * 100))}%` })) : null,
               h('span', { class: 'reading-title' }, b.title)
             )
           )
@@ -170,7 +174,7 @@ function buildMain(main: HTMLElement): void {
 
 /** A small bookcase on the home screen with mini spines and a brass name plate. */
 function bookcase(s: Shelf, books: Book[]): HTMLElement {
-  const sorted = sortBooks(books, settings.sort);
+  const sorted = sortBooks(books.filter((b) => !isDigital(b)), shelfSort(s.id));
   const PER_ROW = 16;
   const rows = [0, 1, 2].map((r) =>
     h(

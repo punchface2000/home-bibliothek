@@ -63,10 +63,12 @@ export type Route =
   | { name: 'book'; id: string }
   | { name: 'add'; tab: AddTab; shelfId?: string }
   | { name: 'find'; kind: 'author' | 'subject'; value: string }
-  | { name: 'list'; filter: ListFilter };
+  | { name: 'list'; filter: ListFilter }
+  | { name: 'group'; kind: 'tag' | 'series'; value: string }
+  | { name: 'stats' };
 
 export type AddTab = 'scan' | 'search' | 'quote' | 'manual';
-export type ListFilter = 'toread' | 'reading' | 'read' | 'abandoned' | 'wishlist';
+export type ListFilter = 'toread' | 'reading' | 'read' | 'abandoned' | 'wishlist' | 'lent';
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').map((p) => {
@@ -81,7 +83,9 @@ export function parseRoute(hash: string): Route {
   if (a === 'book' && b) return { name: 'book', id: b };
   if (a === 'add') return { name: 'add', tab: (['scan', 'search', 'quote', 'manual'] as AddTab[]).includes(b as AddTab) ? (b as AddTab) : 'scan', shelfId: c || undefined };
   if (a === 'find' && (b === 'author' || b === 'subject') && c) return { name: 'find', kind: b, value: c };
-  if (a === 'list' && ['toread', 'reading', 'read', 'abandoned', 'wishlist'].includes(b)) return { name: 'list', filter: b as ListFilter };
+  if (a === 'list' && ['toread', 'reading', 'read', 'abandoned', 'wishlist', 'lent'].includes(b)) return { name: 'list', filter: b as ListFilter };
+  if (a === 'group' && (b === 'tag' || b === 'series') && c) return { name: 'group', kind: b, value: c };
+  if (a === 'stats') return { name: 'stats' };
   return { name: 'home' };
 }
 
@@ -100,6 +104,10 @@ export function routeHash(r: Route): string {
       return `#/find/${r.kind}/${e(r.value)}`;
     case 'list':
       return `#/list/${r.filter}`;
+    case 'group':
+      return `#/group/${r.kind}/${e(r.value)}`;
+    case 'stats':
+      return '#/stats';
   }
 }
 

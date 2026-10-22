@@ -1,17 +1,48 @@
 /** Add a book: scan the barcode, search a catalog, search by quote, or enter it by hand. */
-import { addToLibrary } from '../actions';
-import { back, catalog, go, lang, shelfName, t, type AddTab } from '../app';
+import { addToLibrary, toBookInput } from '../actions';
+import { back, catalog, commit, go, lang, lib, settings, shelfName, t, updateSettings, type AddTab } from '../app';
 import { CatalogError, type CatalogBook } from '../catalog';
 import { looksLikeIsbn, normalizeIsbn } from '../isbn';
 import type { ScanSession } from '../scanner';
-import { bookForm, defaultPlacement, placementControls, previewSheet, resultRow, segmented } from '../ui/components';
+import { findDuplicate, removeBook } from '../library';
+import { bookForm, defaultPlacement, placementControls, previewSheet, resultRow, segmented, toggleEl } from '../ui/components';
 import { debounce, h, icon, iconButton } from '../ui/dom';
 import { I } from '../ui/icons';
 import { toast } from '../ui/overlay';
 import type { View } from '../ui/view';
 
+/* a short "ding" when a book is added in batch mode (Web Audio; iPhone needs a tap first) */
+let audio: AudioContext | null = null;
+function beep(unlockOnly = false): void {
+  try {
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    audio ??= new AC();
+    void audio.resume();
+    if (unlockOnly) return;
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = 'sine';
+    o.frequency.value = 1320;
+    g.gain.setValueAtTime(0.0001, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, audio.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.18);
+    o.connect(g).connect(audio.destination);
+    o.start();
+    o.stop(audio.currentTime + 0.2);
+  } catch {
+    /* no sound available */
+  }
+}
+
 /** Remember what was typed when switching tabs or coming back from a book. */
 const memo = { search: '', quote: '', searchResults: [] as CatalogBook[], quoteResults: [] as CatalogBook[] };
+
+/** Open the Search tab with a query already typed in (e.g. "Dune 3" from "Find volume 3"). */
+export function presetSearch(q: string): void {
+  memo.search = q;
+  memo.searchResults = [];
+}
 
 export function errorText(e: unknown): string {
   if (e instanceof CatalogError && e.kind === 'offline') return t.offline;
@@ -64,6 +95,99 @@ function scanPanel(panel: HTMLElement, shelfId?: string): { cleanup: () => void;
   let session: ScanSession | null = null;
   let alive = true;
 
+  /* ----- batch mode: every scanned book goes straight onto the shelf ----- */
+  let batch = settings.batchScan;
+  const batchPlace = defaultPlacement(shelfId, true);
+  const batchUI = placementControls(batchPlace, { dates: false });
+  const batchList = h('div', { class: 'batch-list' });
+  const batchCount = h('p', { class: 'muted small batch-count' });
+  const batchBox = h('div', { class: 'batch-box' }, h('p', { class: 'muted small' }, t.batchHint), batchUI.el, batchCount, batchList);
+  const added: { id: string; title: string }[] = [];
+  let lastIsbn = '';
+  let lastAt = 0;
+  batchBox.hidden = !batch;
+  const batchToggle = toggleEl(batch, t.batchMode, (v) => {
+    batch = v;
+    batchBox.hidden = !v;
+    panel.classList.toggle('batch-on', v);
+    updateSettings({ batchScan: v }, false);
+    beep(true); // unlock sound on iPhone (needs a tap first)
+  });
+
+  function batchItem(kind: 'added' | 'dup' | 'missing', title: string, isbn: string, bookId?: string): void {
+    const label = kind === 'added' ? t.batchAdded : kind === 'dup' ? t.batchDuplicate : t.batchNotFound;
+    const item = h(
+      'div',
+      { class: `batch-item batch-${kind}` },
+      h('span', { class: 'batch-dot', 'aria-hidden': 'true' }),
+      h('span', { class: 'batch-text' }, h('b', null, title), h('span', { class: 'muted small' }, `${label} · ${isbn}`)),
+      kind === 'added' && bookId
+        ? h(
+            'button',
+            {
+              class: 'btn small',
+              type: 'button',
+              onClick: () => {
+                commit(removeBook(lib, bookId), false);
+                const i = added.findIndex((a) => a.id === bookId);
+                if (i >= 0) added.splice(i, 1);
+                item.remove();
+                batchCount.textContent = added.length ? t.batchSession(added.length) : '';
+              }
+            },
+            t.removeAgain
+          )
+        : kind === 'missing'
+          ? h('button', { class: 'btn small', type: 'button', onClick: () => manualWith({ isbn }) }, t.addManually)
+          : null
+    );
+    batchList.prepend(item);
+  }
+
+  async function batchAdd(isbn: string): Promise<void> {
+    // the same barcode is still in front of the camera: ignore it for a moment
+    if (isbn === lastIsbn && Date.now() - lastAt < 4000) {
+      window.setTimeout(() => session?.resume(), 600);
+      return;
+    }
+    lastIsbn = isbn;
+    lastAt = Date.now();
+    flash();
+    const dup = lib.books.find((b) => b.isbn === isbn);
+    if (dup) {
+      batchItem('dup', dup.title, isbn);
+    } else {
+      status.textContent = `${t.scanLooking} ${isbn}`;
+      try {
+        const book = await catalog.lookupIsbn(isbn);
+        if (!alive) return;
+        const dup2 = book && findDuplicate(lib, book);
+        if (!book) batchItem('missing', `ISBN ${isbn}`, isbn);
+        else if (dup2) batchItem('dup', dup2.title, isbn);
+        else {
+          const b = addToLibrary(toBookInput(book), batchPlace, false);
+          added.push({ id: b.id, title: b.title });
+          batchItem('added', b.title, isbn, b.id);
+          batchCount.textContent = t.batchSession(added.length);
+          beep();
+        }
+        status.textContent = t.scanHint;
+      } catch (e) {
+        if (!alive) return;
+        status.textContent = errorText(e);
+        batchItem('missing', errorText(e), isbn);
+        lastIsbn = ''; // allow a retry of the same book
+      }
+    }
+    window.setTimeout(() => session?.resume(), 900);
+  }
+
+  function flash(): void {
+    box.classList.remove('hit');
+    void box.offsetWidth;
+    box.classList.add('hit');
+  }
+
   const fileInput = h('input', {
     type: 'file',
     accept: 'image/*',
@@ -98,6 +222,7 @@ function scanPanel(panel: HTMLElement, shelfId?: string): { cleanup: () => void;
   isbnInput.addEventListener('keydown', (e) => e.key === 'Enter' && typed());
 
   async function lookup(isbn: string): Promise<void> {
+    if (batch) return batchAdd(isbn);
     status.textContent = `${t.scanLooking} ${isbn}`;
     try {
       const book = await catalog.lookupIsbn(isbn);
@@ -143,9 +268,12 @@ function scanPanel(panel: HTMLElement, shelfId?: string): { cleanup: () => void;
     else if (video.srcObject) status.textContent = t.scanHint;
   }
 
+  panel.classList.toggle('batch-on', batch);
   panel.append(
+    h('div', { class: 'batch-toggle' }, batchToggle),
     box,
     status,
+    batchBox,
     h('button', { class: 'btn wide', type: 'button', onClick: () => fileInput.click() }, icon(I.camera), t.scanPhoto),
     fileInput,
     h('label', { class: 'field' }, h('span', null, t.typeIsbn), h('div', { class: 'input-row' }, isbnInput, h('button', { class: 'btn', type: 'button', onClick: typed }, t.lookUp)))
@@ -215,7 +343,12 @@ function searchPanel(panel: HTMLElement, shelfId?: string): { mounted: () => voi
     hint.hidden = true;
     resultsInto(list, memo.searchResults, shelfId);
   }
-  return { mounted: () => !memo.search && input.focus() };
+  return {
+    mounted: () => {
+      if (!memo.search) input.focus();
+      else if (!memo.searchResults.length) void run();
+    }
+  };
 }
 
 /* ------------------------------------------------------------------ */

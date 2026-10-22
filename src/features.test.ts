@@ -18,6 +18,7 @@ import {
   searchBooks,
   seriesBooks,
   setShelfOrder,
+  setShelfSort,
   sortBooks,
   wishlistText,
   type BookInput,
@@ -123,6 +124,13 @@ describe('several books, my order', () => {
     expect(moveBooks(l, [x.id], 'nope')).toBe(l);
     l = removeBooks(l, [x.id, y.id]);
     expect(l.books.map((b) => b.title)).toEqual(['c']);
+  });
+
+  it('remembers a sort per shelf', () => {
+    let l = lib([{ title: 'a' }]);
+    l = setShelfSort(l, l.shelves[0].id, 'manual');
+    expect(sanitizeLibrary(JSON.parse(JSON.stringify(l)), ['X']).shelves[0].sort).toBe('manual');
+    expect(sanitizeLibrary({ shelves: [{ id: 's', name: 'S', sort: 'bogus' }], books: [] }, ['X']).shelves[0].sort).toBeUndefined();
   });
 
   it('reorders and sorts by my order', () => {

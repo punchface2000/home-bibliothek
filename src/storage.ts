@@ -28,6 +28,10 @@ export interface Settings {
   swipeHintSeen: boolean;
   /** when the backup reminder was last dismissed, 0 = never */
   backupNudgeDismissed: number;
+  /** search address of the reader's own library, with XYZZY where the search words go */
+  librarySearch: string;
+  /** add-book scan tab: add each scanned book straight away */
+  batchScan: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,7 +46,9 @@ export const DEFAULT_SETTINGS: Settings = {
   lastBackup: 0,
   welcomeSeen: false,
   swipeHintSeen: false,
-  backupNudgeDismissed: 0
+  backupNudgeDismissed: 0,
+  librarySearch: '',
+  batchScan: false
 };
 
 const KEY_SETTINGS = 'home-library.settings';
@@ -56,7 +62,8 @@ export function loadSettings(): Settings {
     // guard against values from a future/past version that no longer exist
     if (!['auto', 'light', 'dark'].includes(s.theme)) s.theme = 'auto';
     if (!['auto', 'en', 'de'].includes(s.lang)) s.lang = 'auto';
-    if (!['author', 'title', 'added', 'rating'].includes(s.sort)) s.sort = 'author';
+    if (!['author', 'title', 'added', 'rating', 'manual'].includes(s.sort)) s.sort = 'author';
+    if (typeof s.librarySearch !== 'string') s.librarySearch = '';
     if (!['room', 'grid'].includes(s.homeView)) s.homeView = 'room';
     if (!['spines', 'covers'].includes(s.shelfView)) s.shelfView = 'spines';
     if (!['toread', 'reading', 'read', 'abandoned'].includes(s.lastStatus)) s.lastStatus = 'toread';

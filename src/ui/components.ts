@@ -7,7 +7,7 @@ import { textOn } from '../color';
 import { spineColor } from '../covers';
 import { datesConflict, formatFlexDate, parseFlexDate, todayFlex, type FlexDate } from '../dates';
 import { normalizeIsbn } from '../isbn';
-import { findDuplicate, ratingFromX, STATUSES, type Book, type BookInput, type Status } from '../library';
+import { allSeries, findDuplicate, FORMATS, ratingFromX, STATUSES, type Book, type BookInput, type Format, type Status } from '../library';
 import { h, icon } from './dom';
 import { I } from './icons';
 import { openSheet, toast } from './overlay';
@@ -142,7 +142,14 @@ export function bookRow(b: Book, showShelf = true): HTMLElement {
       { class: 'row-main' },
       h('span', { class: 'row-title' }, b.title),
       h('span', { class: 'row-sub' }, [b.authors.join(', '), b.year].filter(Boolean).join(' · ')),
-      h('span', { class: 'row-meta' }, statusPill(b), b.rating ? starsEl(b.rating, 'stars-sm') : null, showShelf ? h('span', { class: 'row-shelf' }, shelfName(b.shelfId)) : null)
+      h(
+        'span',
+        { class: 'row-meta' },
+        statusPill(b),
+        b.lentTo ? h('span', { class: 'pill pill-lent' }, t.lentTo(b.lentTo)) : null,
+        b.rating ? starsEl(b.rating, 'stars-sm') : null,
+        showShelf ? h('span', { class: 'row-shelf' }, shelfName(b.shelfId)) : null
+      )
     ),
     icon(I.chevron, 'icon chev')
   );
@@ -294,12 +301,14 @@ export interface PlacementUI {
   valid(): boolean;
 }
 
-export function placementControls(place: Placement): PlacementUI {
+export function placementControls(place: Placement, opts: { dates?: boolean } = {}): PlacementUI {
+  const withDates = opts.dates !== false;
   const dates = dateRange({}, (v) => {
     place.started = v.started;
     place.finished = v.finished;
   });
   dates.showFor(place.status);
+  if (!withDates) dates.el.hidden = true;
   const el = h(
     'div',
     { class: 'placement' },
@@ -311,12 +320,13 @@ export function placementControls(place: Placement): PlacementUI {
       statusSeg(place.status, (st) => {
         place.status = st;
         dates.showFor(st);
+        if (!withDates) dates.el.hidden = true;
       })
     ),
     dates.el,
     toggleEl(place.owned, t.owned, (v) => (place.owned = v))
   );
-  return { el, valid: () => dates.valid() };
+  return { el, valid: () => !withDates || dates.valid() };
 }
 
 export function previewSheet(c: CatalogBook, opts: { shelfId?: string; owned?: boolean; onAdded?: (b: Book) => void; onClose?: () => void } = {}): void {
@@ -413,6 +423,17 @@ export function bookForm(init: Partial<BookInput> = {}): BookForm {
   const publisher = inp(init.publisher);
   const isbn = inp(init.isbn, { inputmode: 'numeric' });
   const cover = inp(init.coverUrl, { type: 'url', inputmode: 'url', autocapitalize: 'off', spellcheck: false });
+  // series, with existing names offered while typing
+  const listId = `series-${Math.random().toString(36).slice(2, 8)}`;
+  const series = inp(init.series, { list: listId, autocapitalize: 'words' });
+  const seriesList = h('datalist', { id: listId }, ...allSeries(lib.books).map((n) => h('option', { value: n })));
+  const seriesNo = inp(init.seriesNo, { inputmode: 'decimal', maxlength: 5 });
+  const format = h(
+    'select',
+    { class: 'select', 'aria-label': t.format },
+    h('option', { value: '', selected: !init.format }, t.formatNone),
+    ...FORMATS.map((f) => h('option', { value: f, selected: init.format === f }, t.formats[f]))
+  );
   const el = h(
     'div',
     { class: 'book-form' },
@@ -420,6 +441,9 @@ export function bookForm(init: Partial<BookInput> = {}): BookForm {
     field(t.subtitle, subtitle, `(${t.optional})`),
     field(t.authors, authors, `(${t.authorsHint})`),
     h('div', { class: 'field-pair' }, field(t.year, year), field(t.pages, pages)),
+    h('div', { class: 'field-pair field-pair-series' }, field(t.series, series, `(${t.optional})`), field(t.seriesNo, seriesNo)),
+    seriesList,
+    h('label', { class: 'field' }, h('span', null, t.format), format),
     field(t.publisher, publisher, `(${t.optional})`),
     field(t.isbn, isbn, `(${t.optional})`),
     field(t.coverUrl, cover, `(${t.optional})`)
@@ -445,7 +469,12 @@ export function bookForm(init: Partial<BookInput> = {}): BookForm {
         return null;
       }
       const url = cover.value.trim();
+      const sName = series.value.trim();
+      const sNo = parseFloat(seriesNo.value.replace(',', '.'));
       return {
+        series: sName || undefined,
+        seriesNo: sName && Number.isFinite(sNo) && sNo >= 0 ? sNo : undefined,
+        format: (format.value || undefined) as Format | undefined,
         title: tt,
         subtitle: subtitle.value.trim() || undefined,
         authors: authors.value

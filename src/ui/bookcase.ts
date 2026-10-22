@@ -29,6 +29,8 @@ export interface CaseOptions {
   /** small version: no text, not individually tappable */
   mini?: boolean;
   onBook?: (b: Book) => void;
+  /** books shown as selected (select mode) */
+  selected?: Set<string>;
 }
 
 function spineEl(b: Book, scale: number, o: CaseOptions): HTMLElement {
@@ -36,8 +38,8 @@ function spineEl(b: Book, scale: number, o: CaseOptions): HTMLElement {
   const w = Math.max(3, Math.round(spineWidth(b) * scale));
   const upward = (b.language ?? '').startsWith('de');
   const style = `--spine:${color};--spine-ink:${textOn(color)};width:${w}px;height:${Math.round(spineHeight(b) * 100)}%`;
-  const statusCls = [`st-${b.status}`, b.owned ? '' : 'ghost'];
-  if (o.mini) return h('span', { class: ['spine', 'mini', ...statusCls].filter(Boolean).join(' '), style, dataset: { book: b.id } }, b.status === 'reading' ? h('span', { class: 'ribbon' }) : null);
+  const statusCls = [`st-${b.status}`, b.owned ? '' : 'ghost', b.lentTo ? 'lent' : '', o.selected?.has(b.id) ? 'selected' : ''];
+  if (o.mini) return h('span', { class: ['spine', 'mini', ...statusCls].filter(Boolean).join(' '), style, dataset: { book: b.id } }, b.status === 'reading' && !b.lentTo ? h('span', { class: 'ribbon' }) : null);
 
   const wide = w >= 30;
   const twoLines = w >= 36 && b.title.length > 18;
@@ -50,11 +52,22 @@ function spineEl(b: Book, scale: number, o: CaseOptions): HTMLElement {
   const cls = ['spine', ...statusCls, upward ? 'up' : '', wide ? 'wide' : '', twoLines ? 'two' : ''].filter(Boolean).join(' ');
   return h(
     'button',
-    { class: cls, type: 'button', style, dataset: { book: b.id }, 'aria-label': `${b.title}${b.authors[0] ? `, ${b.authors[0]}` : ''}`, onClick: () => o.onBook?.(b) },
+    {
+      class: cls,
+      type: 'button',
+      style,
+      dataset: { book: b.id },
+      'aria-label': `${b.title}${b.authors[0] ? `, ${b.authors[0]}` : ''}${b.lentTo ? ` (${b.lentTo})` : ''}`,
+      'aria-pressed': o.selected ? String(o.selected.has(b.id)) : undefined,
+      onClick: () => o.onBook?.(b)
+    },
     h('span', { class: 'spine-band top' }),
     h('span', { class: 'spine-text' }, h('span', { class: 'spine-title' }, b.title), showAuthor ? h('span', { class: 'spine-author' }, surname) : null),
     h('span', { class: 'spine-band bottom' }),
-    b.status === 'reading' ? h('span', { class: 'ribbon', 'aria-hidden': 'true' }) : null
+    b.status === 'reading' && !b.lentTo ? h('span', { class: 'ribbon', 'aria-hidden': 'true' }) : null,
+    // a lent book leaves a gap with a little paper slip saying who has it
+    b.lentTo ? h('span', { class: 'lent-slip', 'aria-hidden': 'true' }, b.lentTo) : null,
+    o.selected?.has(b.id) ? h('span', { class: 'sel-mark', 'aria-hidden': 'true' }) : null
   );
 }
 

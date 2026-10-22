@@ -3,7 +3,8 @@
  * wall lamps, wainscoting and a wooden floor. Swipe sideways to walk
  * along the wall; tap a bookcase to open that shelf.
  */
-import { addShelf, sortBooks, type Shelf } from '../library';
+import { addShelf, isDigital, sortBooks, type Shelf } from '../library';
+import { shelfSort } from './shelf';
 import { commit, go, lib, settings, t, updateSettings } from '../app';
 import { fitRows } from '../shelfLayout';
 import { bookcaseEl, caseRows } from '../ui/bookcase';
@@ -97,14 +98,15 @@ export function roomEl(): { el: HTMLElement; mounted(): void; cleanup(): void } 
 }
 
 function roomCase(s: Shelf, inner: number, rowHeight: number, rows: number): HTMLElement {
-  const books = sortBooks(lib.books.filter((b) => b.shelfId === s.id), settings.sort);
+  const all = lib.books.filter((b) => b.shelfId === s.id);
+  const books = sortBooks(all.filter((b) => !isDigital(b)), shelfSort(s.id));
   const { el, body } = bookcaseEl('bookcase-mini');
   body.append(...caseRows({ books, width: inner, rowHeight, minRows: rows, maxRows: rows, seed: s.id, mini: true }));
   return h(
     'button',
-    { class: 'room-case', type: 'button', 'aria-label': `${s.name}, ${t.books(books.length)}`, onClick: () => go({ name: 'shelf', id: s.id }) },
+    { class: 'room-case', type: 'button', 'aria-label': `${s.name}, ${t.books(all.length)}`, onClick: () => go({ name: 'shelf', id: s.id }) },
     el,
-    h('span', { class: 'room-plate' }, h('span', { class: 'plate-name' }, s.name), h('span', { class: 'plate-count' }, String(books.length)))
+    h('span', { class: 'room-plate' }, h('span', { class: 'plate-name' }, s.name), h('span', { class: 'plate-count' }, String(all.length)))
   );
 }
 
